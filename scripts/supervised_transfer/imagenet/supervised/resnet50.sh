@@ -11,7 +11,7 @@
 echo 'train resnet50 10 times.'
 
 
-EXPERIMENT_PATH=results/supervised/imagenet/resnet50/run${SLURM_ARRAY_TASK_ID}
+EXPERIMENT_PATH=results/supervised/imagenet/run${SLURM_ARRAY_TASK_ID}
 mkdir $EXPERIMENT_PATH -p
 
 
