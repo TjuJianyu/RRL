@@ -68,15 +68,21 @@ Pretrain resnet50 10 times on ImageNet1k with different random seeds as [script]
 #### Linear Probing
 
 |method|architecture| target task |args|
-|:---:       |:---:        |:---:       |
+|:---:|:---:       |:---:        |:---:       |
 |ERM|  resnet50  | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cifar_bn.sh)|
 |ERM|  resnet50w2/w4 2x/4xresnet50 | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cifar_bn_wide.sh)|
 |CAT| resnet50 | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cat_cifar_bn.sh)|
 |Distill| resnet50| Cifar10/Cifar100| |
-|ERM|  resnet50  | Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cifar_bn.sh)|
-|ERM|  resnet50w2/w4 2x/4xresnet50 | Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cifar_bn_wide.sh)|
-|CAT| resnet50 | Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cat_cifar_bn.sh)|
-|Distill| resnet50| Inaturalist18| |
+|ERM|  resnet50  | Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/inat.sh)|
+|ERM|  resnet50w2/w4 2x/4xresnet50 | Inaturalist18||
+|CAT| resnet50 | Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/cat_inat.sh)|
+|Distill| resnet50| Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/inat_synt.sh) |
+
+
+#### fine tuning
+
+
+
 
 ![Alt text](figures/imagenet_sl_tf_v4.png)
 
