@@ -1,7 +1,6 @@
 ## Rich Representation Learning
 ### Official code for [learning useful representations for shifting tasks and distributions](https://arxiv.org/abs/2212.07346)
 
-
 ## requirements
 portalocker
 pyyaml
@@ -23,7 +22,7 @@ For out-of-distribution robustness, Camlyon17 are testd.
 
 ## Supervised transfer
 ### ImageNet1k supervise pretraining
-Pretrain resnet50 10 times on ImageNet1k with different random seeds as [script](scripts/supervised_transfer/supervised_pretrain/resnet50.sh). Alternatively, we provide 10 such checkpoints at [here](https://drive.google.com/file/d/1puDJCfUdexV7jc2QDtzT3GIV6bK_a5DS/view?usp=sharing).
+Pretrain resnet50 10 times on ImageNet1k with different random seeds.
 
 | architecture| N repeats | url    | args |
 | :---:       |    :----: | :---:  | :---:|
@@ -38,9 +37,18 @@ Pretrain resnet50 10 times on ImageNet1k with different random seeds as [script]
  ┣ 📂checkpoints
  ┃ ┣ 📂supervised_pretrain
  ┃ ┃ ┣ 📂resnet50
- ┃ ┃ ┃ ┣📜 ]
+ ┃ ┃ ┃ ┣📜 checkpoint_run0.pth.tar 
  ┃ ┃ ┃ ┃ ...			
  ┃ ┃ ┃ ┗📜 checkpoint_run9.pth.tar 
+ ┃ ┃ ┣ 📂vit
+ ┃ ┃ ┃ ┣📜 vitaugreg/imagenet21k/ViT-B_16.npz
+ ┃ ┃ ┃ ┣📜 vitaugreg/imagenet21k/ViT-L_16.npz
+ ┃ ┃ ┃ ┣📜 vit/imagenet21k/ViT-B_16.npz
+ ┃ ┃ ┃ ┗📜 vit/imagenet21k/ViT-L_16.npz
+ ┃ ┃ ┣📜 vitaugreg/imagenet21k/imagenet2012/ViT-L_16.npz
+ ┃ ┃ ┣📜 vitaugreg/imagenet21k/imagenet2012/ViT-L_16.npz
+ ┃ ┃ ┣📜 vit/imagenet21k/imagenet2012/ViT-L_16.npz
+ ┃ ┃ ┣📜 vit/imagenet21k/imagenet2012/ViT-L_16.npz
  ┃ ┃ ┣📜 2resnet50_imagenet1k_supervised.pth.tar
  ┃ ┃ ┣📜 4resnet50_imagenet1k_supervised.pth.tar
  ┃ ┃ ┣📜 resnet50w2_imagenet1k_supervised.pth.tar
@@ -63,6 +71,7 @@ Pretrain resnet50 10 times on ImageNet1k with different random seeds as [script]
  ┃ ┃ ┣📜 seer_regnet64gf_finetuned.pth
  ┃ ┃ ┣📜 seer_regnet128gf_finetuned.pth
  ┃ ┃ ┣📜 seer_regnet256gf_finetuned.pth
+ ┃ ┃ 
 ```
 ### transfer
 #### Linear Probing
@@ -79,9 +88,18 @@ Pretrain resnet50 10 times on ImageNet1k with different random seeds as [script]
 |Distill| resnet50| Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/inat_synt.sh) |
 
 
-#### fine tuning
+#### fine tuning and two-stage fine-tuning
 
-
+|method|architecture| target task |args|
+|:---:|:---:       |:---:        |:---:       |
+|ERM|  resnet50  | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/fine-tuning/finetune.sh)|
+|ERM|  resnet50w2/w4 2x/4xresnet50 | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/fine-tuning/finetune.sh)|
+|CAT| resnet50 | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cat_cifar_bn.sh)|
+|Distill| resnet50| Cifar10/Cifar100| |
+|ERM|  resnet50  | Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/inat.sh)|
+|ERM|  resnet50w2/w4 2x/4xresnet50 | Inaturalist18||
+|CAT| resnet50 | Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/cat_inat.sh)|
+|Distill| resnet50| Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/inat_synt.sh) |
 
 
 ![Alt text](figures/imagenet_sl_tf_v4.png)
@@ -100,8 +118,46 @@ Pretrain resnet50 10 times on ImageNet1k with different random seeds as [script]
 |CAT10  |   10×RESNET50  |   235M  |   97.19  |   86.65  |   64.39  |   98.17  |   88.50  |   69.07|
 |DISTILL5  |   RESNET50  |   23.5M  |   97.07  |   85.31  |   64.17  |   -  |   -  |   -|
 
-### Download vision transformer checkpoints
-### transfer 
+
+### Vision Transformer transfer-learning
+#### Download VIT pretraining [checkpoints](https://github.com/google-research/vision_transformer): 
+```
+mkdir checkpoints/vitaugreg/imagenet21k -p
+wget https://storage.googleapis.com/vit_models/augreg/L_16-i21k-300ep-lr_0.001-aug_strong1-wd_0.1-do_0.0-sd_0.0.npz -O checkpoints/supervised_pretrain/vitaugreg/imagenet21k/ViT-L_16.npz
+wget https://storage.googleapis.com/vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz -O checkpoints/supervised_pretrain/vitaugreg/imagenet21k/ViT-B_16.npz
+
+mkdir checkpoints/vit/imagenet21k -p
+wget https://storage.googleapis.com/vit_models/imagenet21k/ViT-L_16.npz -O checkpoints/supervised_pretrain/vit/imagenet21k/ViT-L_16.npz
+wget https://storage.googleapis.com/vit_models/imagenet21k/ViT-B_16.npz -O checkpoints/supervised_pretrain/vit/imagenet21k/ViT-B_16.npz
+
+```
+
+#### Download VIT Imagenet1k fine-tuning [checkpoints](https://github.com/google-research/vision_transformer):
+```
+
+mkdir checkpoints/vitaugreg/imagenet21k/imagenet2012 -p
+wget https://storage.googleapis.com/vit_models/augreg/L_16-i21k-300ep-lr_0.001-aug_strong1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_384.npz -O checkpoints/vitaugreg/imagenet21k/imagenet2012/ViT-L_16.npz
+wget https://storage.googleapis.com/vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_384.npz -O checkpoints/vitaugreg/imagenet21k/imagenet2012/ViT-B_16.npz
+
+mkdir checkpoints/vit/imagenet21k/imagenet2012 -p
+wget https://storage.googleapis.com/vit_models/imagenet21k+imagenet2012/ViT-L_16.npz -O checkpoints/vit/imagenet21k/imagenet2012/ViT-L_16.npz
+wget https://storage.googleapis.com/vit_models/imagenet21k+imagenet2012/ViT-B_16.npz -O checkpoints/vit/imagenet21k/imagenet2012/ViT-B_16.npz
+
+```
+
+
+### transfer
+#### linear probing
+
+scripts/supervised_transfer/imagenet21k/imagenet/vit.sh
+scripts/supervised_transfer/imagenet21k/imagenet/vitaugreg.sh
+scripts/supervised_transfer/imagenet21k/imagenet/bcat2_vitaugreg.sh
+scripts/supervised_transfer/imagenet21k/imagenet/cat_vit.sh
+
+#### two-stage fine-tuning
+
+scripts/supervised_transfer/imagenet21k/imagenet/2ft_bcat2_vitagureg.sh
+scripts/supervised_transfer/imagenet21k/imagenet/2ft_vit.sh
 
 
 ## self-supervised transfer
@@ -147,6 +203,11 @@ https://dl.fbaipublicfiles.com/vissl/model_zoo/seer_finetuned/seer_regnet256_fin
 
 
 ### transfer
+#### Linear probing
+
+
+#### fine-tuning and two-stage fine-tuning
+
 
 
 ## few-shot learning and meta-learning
