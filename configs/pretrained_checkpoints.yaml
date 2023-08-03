@@ -10,6 +10,29 @@ swav_resnet50w4:
 swav_resnet50w5:
   arch: [resnet50w5]
   pretrained: [checkpoints/self_supervised_pretrain/swav_RN50w5_400ep_pretrain.pth.tar]
+
+
+swav_resnet50_run5:
+  arch: [resnet50]
+  pretrained: [checkpoints/self_supervised_pretrain/swav_400ep_pretrain.pth.tar]
+swav_resnet50_run6:
+  arch: [resnet50]
+  pretrained: [checkpoints/self_supervised_pretrain/swav_400ep_pretrain_seed5.pth.tar]
+swav_resnet50_run7:
+  arch: [resnet50]
+  pretrained: [checkpoints/self_supervised_pretrain/swav_400ep_pretrain_seed6.pth.tar]
+swav_resnet50_run8:
+  arch: [resnet50]
+  pretrained: [checkpoints/self_supervised_pretrain/swav_400ep_pretrain_seed7.pth.tar]
+swav_resnet50_run9:
+  arch: [resnet50]
+  pretrained: [checkpoints/self_supervised_pretrain/swav_400ep_pretrain_seed8.pth.tar]
+
+
+swav_cat_2:
+  arch: [resnet50, resnet50]
+  pretrained: [checkpoints/self_supervised_pretrain/swav_400ep_pretrain.pth.tar, 
+              checkpoints/self_supervised_pretrain/swav_400ep_pretrain_seed5.pth.tar]
 swav_cat_5:
   arch: [resnet50, resnet50, resnet50, resnet50,resnet50]
   pretrained: [checkpoints/self_supervised_pretrain/swav_400ep_pretrain.pth.tar, 

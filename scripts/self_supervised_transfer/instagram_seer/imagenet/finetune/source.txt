@@ -1,1 +1,0 @@
-copyed from https://github.com/facebookresearch/vissl/tree/main/projects/SEER 
