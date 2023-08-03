@@ -2,13 +2,16 @@
 -----------------------
 Official Pytorch implementation of [paper](https://arxiv.org/abs/2212.07346)
 
-[Jianyu Zhang](https://www.jianyuzhang.com/)  [L\'eon Bottou](https://leon.bottou.org/)
+[Jianyu Zhang](https://www.jianyuzhang.com/),  [Léon Bottou](https://leon.bottou.org/)
 
 
 ## requirements
-portalocker
-pyyaml
 
+- python==3.7
+- torch>=1.13.1  
+- torchvision>=0.14.1
+- pyyaml==6.0
+- classy-vision==0.6.0
 
 ## datasets
 
@@ -17,7 +20,7 @@ We consider the following datasets:
 - [Inaturalist18](https://ml-inat-competition-datasets.s3.amazonaws.com/2018/train_val2018.tar.gz)
 - [Cifar10/Cifar100](https://www.cs.toronto.edu/~kriz/cifar.html)
 
-Download and extract `ImageNet` and `Inaturalist18` datasets to `data/imagenet` and `data/inaturalist18`.  
+Download and extract `ImageNet` and `Inaturalist18` datasets to `data/imagenet` and `data/inaturalist18`. The resulting folder structure should be:
 
 ```
 📦 RRL
@@ -37,7 +40,12 @@ For out-of-distribution robustness, Camlyon17 are testd.
 
 ### Download (ImageNet1k) pretrained checkpoints:
 
+You can download pretrained checkpoints either:
+- by running ```python tools download.py``` or
+- by hand according to [download_checkpoint.md](download_checkpoint.md)
 
+
+The resulting folder structure should be: 
 ```
 📦 RRL
  ┣ 📂checkpoints
@@ -54,21 +62,8 @@ For out-of-distribution robustness, Camlyon17 are testd.
 
 ```
 
-| architecture| N repeats | url    | args |
-| :---:       |    :----: | :---:  | :---:|
-| resnet50    | 10      | [model](https://drive.google.com/file/d/1puDJCfUdexV7jc2QDtzT3GIV6bK_a5DS/view?usp=sharing)  | [script](scripts/supervised_transfer/imagenet/supervised_pretrain/resnet50.sh)|
-| resnet50w2  | 1       | [model](https://drive.google.com/file/d/1yxpGox1on8EG-bgh5m96P-HmFdF1FqKV/view?usp=sharing)  | [script](scripts/supervised_transfer/imagenet/supervised_pretrain/resnet50_wide.sh)|
-| resnet50w4  | 1       | [model](https://drive.google.com/file/d/1BMCdWbRp4nUxRQwKux-_BEQS_5TKC2h6/view?usp=sharing)  | [script](scripts/supervised_transfer/imagenet/supervised_pretrain/resnet50_wide.sh)| 	
-| 2resnet50   | 1       | [model](https://drive.google.com/file/d/1vC5es1ysSSZOEhkKQWBafjRyLR_oFPgl/view?usp=sharing)  | [script](scripts/supervised_transfer/imagenet/supervised_pretrain/resnet50_wide.sh)|
-| 4resnet50   | 1       | [model](https://drive.google.com/file/d/1J3adr3hepZZXyLcncduBi3v6PZLPAEW5/view?usp=sharing)  | [script](scripts/supervised_transfer/imagenet/supervised_pretrain/resnet50_wide.sh)|
-
-#### Download distilled ResNet50 checkpoint from [here](https://drive.google.com/file/d/1iS82WpEWaTqU6I1qbzEB64mttIp1dYDz/view?usp=sharing)
-
-
-
 
 ### Transfer by Linear Probing
-
 
 |method|architecture| target task |args|
 |:---:|:---:       |:---:        |:---:       |
@@ -95,21 +90,6 @@ For out-of-distribution robustness, Camlyon17 are testd.
 |CAT| resnet50 | Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/cat_inat.sh)|
 |Distill| resnet50| Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/inat_synt.sh) |
 
-
-
-
-|method  |   architecture  |   params  |   CIFAR10  |   CIFAR100  |   INAT18  |   CIFAR10  |   CIFAR100  |   INAT18|
-|--------|--------|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|
-|ERM  |   RESNET50  |   23.5M  |   97.54  |   85.58  |   64.19  |   -  |   -  |   -|
-|ERM  |   RESNET50W2  |   93.9M  |   97.76  |   87.13  |   66.72  |   -  |   -  |   -|
-|ERM  |   RESNET50W4  |   375M  |   97.88  |   87.95  |   66.99  |   -  |   -  |   -|
-|ERM  |   2×RESNET50  |   47M  |   97.39  |   85.77  |   62.57  |   -  |   -  |   -|
-|ERM  |   4×RESNET50  |   94M  |   97.38  |   85.56  |   61.58  |   -  |   -  |   -|
-|CAT2  |   2×RESNET50  |   47M  |   97.56  |   86.04  |   64.49  |   97.87  |   87.07  |   66.96|
-|CAT4  |   4×RESNET50  |   94M  |   97.53  |   86.54  |   64.54  |   98.14  |   88.00  |   68.42|
-|CAT5  |   5×RESNET50  |   118M  |   97.57  |   86.46  |   64.86  |   98.19  |   88.11  |   68.48|
-|CAT10  |   10×RESNET50  |   235M  |   97.19  |   86.65  |   64.39  |   98.17  |   88.50  |   69.07|
-|DISTILL5  |   RESNET50  |   23.5M  |   97.07  |   85.31  |   64.17  |   -  |   -  |   -|
 
 
 ## Supervised transfer learning (ViT)
@@ -242,5 +222,16 @@ https://dl.fbaipublicfiles.com/vissl/model_zoo/seer_finetuned/seer_regnet256_fin
 
 #### fine-tuning and two-stage fine-tuning
 
-
+## Citation
+If you find this code useful for your research, please consider citing our work:
+```
+@inproceedings{zhang2023learning,
+  title={Learning useful representations for shifting tasks and distributions},
+  author={Zhang, Jianyu and Bottou, L{\'e}on},
+  booktitle={International Conference on Machine Learning},
+  pages={40830--40850},
+  year={2023},
+  organization={PMLR}
+}
+```
 
