@@ -5,7 +5,7 @@ Official Pytorch implementation of [paper](https://arxiv.org/abs/2212.07346)
 [Jianyu Zhang](https://www.jianyuzhang.com/),  [Léon Bottou](https://leon.bottou.org/)
 
 
-## requirements
+## Requirements
 
 - python==3.7
 - torch>=1.13.1  
@@ -13,7 +13,7 @@ Official Pytorch implementation of [paper](https://arxiv.org/abs/2212.07346)
 - pyyaml==6.0
 - classy-vision==0.6.0
 
-## datasets
+## Datasets
 
 We consider the following datasets: 
 - [ImageNet](https://www.image-net.org/index.php) 
@@ -61,6 +61,12 @@ The resulting folder structure should be:
 
 ### Transfer by Linear Probing, Fine-Tuning, and Two-stage Fine-Tuning:
 
+Transfer the learned representation (on ImageNet1k) to Cifar10, Cifar100, and Inaturalist18 by:
+- **Linear Probing**: concatenate these representation and learn a big linear classifier on top.
+- **(Normal) Fine tuning**: concatenate pretrained representations then fine tuning all weights. 
+- **(Two-stage) Fine tuning**: fine-tune each pretrained representation on target tasks separately, then concatenate the representation and apply linear probing. 
+
+The following table provides scripts for these transfer learning experiments:
 
 |method|architecture| target task |linear probing| fine-tuning | two-stage fine-tuning |
 |:---:|:---:       |:---:        |:---:       |:---:       |:---:       |
@@ -73,8 +79,28 @@ The resulting folder structure should be:
 |CAT| -                            | Inaturalist18   |[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/cat_inat.sh)|[scripts](scripts/supervised_transfer/imagenet/to_inat18/fine-tuning/finetune_cat.sh)|[scripts](scripts/supervised_transfer/imagenet/to_inat18/fine-tuning/rich_finetune.sh)|
 |Distill| resnet50                 | Inaturalist18   |[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/distill5.sh)|[scripts](scripts/supervised_transfer/imagenet/to_inat18/fine-tuning/finetune_distill5.sh)|-|
 
+<p align="center">
+<em>
+Tab1: transfer learning experiments scripts.
+</em>
+</p>
+ 
+The following figure shows (focus on solid curves) the transfer learning performance of different representations (ERM / CAT / Distill) and transfer methods (pinear probing / Ffne-tuning / two-stage fine-tuning). 
+
+<p align="center">
+  <image src='figures/imagenet_sl_tf_v4.png'/>
+</p>
+
+<p align="center">
+<em>
+  Fig1: Supervised transfer learning from ImageNet to Inat18, Cifar100, and Cifar10. The top row shows the superior linear
+probing performance of the CATn networks (blue, “cat”). The bottom row shows the performance of fine-tuned CATn, which is poor with
+normal fine-tuning (gray, “[init]cat”) and excellent for two-stage fine tuning (blue, “[2ft]cat”). DISTILLn (pink, “distill”) representation is obtained by distilling CATn into one ResNet50.
+</em>
+</p>
 
 
+ 
 ## Supervised transfer learning (ViT)
 
 ### Download (Imagenet21k) pretrained & (ImageNet1k) finetuned ViT checkpoints according to [download_checkpoint.md](download_checkpoint.md)
@@ -96,6 +122,18 @@ The resulting folder structure looks like:
  ┃ ┃ ┣📜 vit/imagenet21k/imagenet2012/ViT-L_16.npz
 
 ```
+
+With the same experiment protocol as Tab1, we can have the following transfer learning curves with Vision Transformer: 
+
+<p align="center">
+  <image src='figures/vit_tf_v3.png'/>
+</p>
+
+<p align="center">
+<em>
+  Fig2: 
+</em>
+</p>
 
 
 ## self-supervised transfer learning
@@ -126,11 +164,28 @@ The resulting folder structure looks like:
  ┃ ┃ ┣📜 seer_regnet256gf_finetuned.pth
 ```
 
+With the same experiment protocol as Tab1, we can have the following self-supervised transfer learning curves: 
 
-### Transfer by Linear Probing, Fine-Tuning, and Two-stage Fine-Tuning (SWAV pretrained ImageNet1k):
+<p align="center">
+  <image src='figures/ssl_tf.png'/>
+</p>
+
+<p align="center">
+<em>
+  Fig2: Self-supervised transfer learning with SWAV trained on unlabeled ImageNet(1K) (top row) and with SEER on Instagram1B 
+(bottom row). The constructed rich representation, CATn, yields the best linear probing performance (“cat” and “cat$^sub$”) for supervised
+ImageNet, INAT18, CIFAR100, and CIFAR10 target tasks. The two-stage fine-tuning (“[2ft]cat”) matches equivalently sized baseline
+models (“[init]wide” and “[init]wide&deep”), but with much easier training. The sub-networks of CAT5 (and CAT2) in SWAV hold the
+same architecture
+</em>
+</p>
+
+
+<!-- ### Transfer by Linear Probing, Fine-Tuning, and Two-stage Fine-Tuning (SWAV pretrained ImageNet1k): -->
 
 
 ## Meta-learning & few-shots learning and Out-of-distribution generalization
+
 If you are further interested in the rest few-shots learning and out-of-distribution generalization code, please let me know by leaving a comment. 
 
 
