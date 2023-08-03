@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --job-name=cifar_supervised_resnet50_lineareval
 #SBATCH --time=24:00:00
-#SBATCH --array=0-71
+#SBATCH --array=0-95
 #SBATCH --mem=64G
 
 #resnet50w4
@@ -19,7 +19,7 @@ do
 		do 
 			for run in 0;
 			do 
-					for model in resnet50w2 2resnet50 4resnet50;
+					for model in resnet50w4 resnet50w2 2resnet50 4resnet50;
 					do 
 						for data in  cifar10 cifar100; 
 						do 	
@@ -53,8 +53,8 @@ mkdir ${resdir} -p
 EXPERIMENT_PATH=$resdir
 
 srun --output=${EXPERIMENT_PATH}/%j.out --error=${EXPERIMENT_PATH}/%j.err python supervised.py  --dump_path ${resdir} \
---arch ${final_model}  --lr ${final_lr} --scheduler_type cosine --final_lr 0.0000001 --epoch ${final_epoch} \
---pretrained results/supervised/imagenet/${final_model}/checkpoint.pth.tar \
+--tag supervisedimagenet_${final_model} \
+--lr ${final_lr} --scheduler_type cosine --final_lr 0.0000001 --epoch ${final_epoch} \
 --data_name ${final_data}  --classifier linear --batch_size ${final_bs}  --data_path data  --wd ${final_wd} \
 --exp_mode finetune --nesterov False --wd_skip_bn True \
 --headinit none --classifier_bn2nonbn False --use_bn False  --tf_name 224px --eval_freq 1 --sync_bn True || scontrol requeue $SLURM_JOB_ID

@@ -29,20 +29,16 @@ Download and extract `ImageNet` and `Inaturalist18` datasets to `data/imagenet` 
  ┃ ┣ 📂inaturalist18
 ```
 
-<!-- 
-For few-shot learning / meta-learning, CUB and miniImagenet are tested. 
-
-For out-of-distribution robustness, Camlyon17 are testd. 
- -->
 
 ## Supervised transfer learning (ResNet)
 
 
 ### Download (ImageNet1k) pretrained checkpoints:
 
-You can download pretrained checkpoints either:
-- by running ```python tools download.py``` or
-- by hand according to [download_checkpoint.md](download_checkpoint.md)
+You can get pretrained checkpoints either:
+- by automatically download according to ```python tools download.py``` or
+- by manually download according to [download_checkpoint.md](download_checkpoint.md) or 
+- by training from scratch according to [download_checkpoint.md](download_checkpoint.md)
 
 
 The resulting folder structure should be: 
@@ -63,38 +59,42 @@ The resulting folder structure should be:
 ```
 
 
-### Transfer by Linear Probing
+### Transfer by Linear Probing, Fine-Tuning, and Two-stage Fine-Tuning:
 
-|method|architecture| target task |args|
+
+|method|architecture| target task |linear probing| fine-tuning | two-stage fine-tuning |
 |:---:|:---:       |:---:        |:---:       |
-|ERM|  resnet50  | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cifar_bn.sh)|
-|ERM|  resnet50w2/w4 2x/4xresnet50 | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cifar_bn_wide.sh)|
-|CAT| resnet50 | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cat_cifar_bn.sh)|
-|Distill| resnet50| Cifar10/Cifar100| |
-|ERM|  resnet50  | Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/inat.sh)|
-|ERM|  resnet50w2/w4 2x/4xresnet50 | Inaturalist18||
-|CAT| resnet50 | Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/cat_inat.sh)|
-|Distill| resnet50| Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/inat_synt.sh) |
-
-
-### Transfer by fine tuning and two-stage fine-tuning
-
-|method|architecture| target task |args|
-|:---:|:---:       |:---:        |:---:       |
-|ERM|  resnet50  | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/fine-tuning/finetune.sh)|
-|ERM|  resnet50w2/w4 2x/4xresnet50 | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/fine-tuning/finetune.sh)|
-|CAT| resnet50 | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cat_cifar_bn.sh)|
-|Distill| resnet50| Cifar10/Cifar100| |
-|ERM|  resnet50  | Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/inat.sh)|
-|ERM|  resnet50w2/w4 2x/4xresnet50 | Inaturalist18||
-|CAT| resnet50 | Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/cat_inat.sh)|
-|Distill| resnet50| Inaturalist18|[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/inat_synt.sh) |
+|ERM|  resnet50                    | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cifar_bn.sh)| [scripts](scripts/supervised_transfer/imagenet/to_cifar/fine-tuning/finetune.sh)| - |
+|ERM|  resnet50w2/w4 2x/4xresnet50 | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cifar_bn_wide.sh)| [scripts](scripts/supervised_transfer/imagenet/to_cifar/fine-tuning/finetune_wide.sh)| - |
+|CAT| resnet50                     | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/cat_cifar_bn.sh)| [scripts](scripts/supervised_transfer/imagenet/to_cifar/fine-tuning/finetune_cat.sh)| [scripts](scripts/supervised_transfer/imagenet/to_cifar/two-satge_fine-tuning/rich_finetune.sh) |
+|Distill| resnet50                 | Cifar10/Cifar100|[scripts](scripts/supervised_transfer/imagenet/to_cifar/linear_probing/distill5.sh)| [scripts](scripts/supervised_transfer/imagenet/to_cifar/fine-tuning/finetune_distill5.sh)| - |
+|ERM|  resnet50                    | Inaturalist18   |[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/inat.sh)| [scripts](scripts/supervised_transfer/imagenet/to_inat18/fine-tuning/finetune.sh)| -|
+|ERM|  resnet50w2/w4 2x/4xresnet50 | Inaturalist18   |[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/rn50wide.sh)|[scripts](scripts/supervised_transfer/imagenet/to_inat18/fine-tuning/finetune_wide.sh)|-|
+|CAT| resnet50                     | Inaturalist18   |[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/cat_inat.sh)|[scripts](scripts/supervised_transfer/imagenet/to_inat18/fine-tuning/finetune_cat.sh)|[scripts](scripts/supervised_transfer/imagenet/to_inat18/fine-tuning/rich_finetune.sh)|
+|Distill| resnet50                 | Inaturalist18   |[scripts](scripts/supervised_transfer/imagenet/to_inat18/linear_probing/distill5.sh)|[scripts](scripts/supervised_transfer/imagenet/to_inat18/fine-tuning/finetune_distill5.sh)|-|
 
 
 
+<!-- 
+|method  |   architecture  |   params  |   CIFAR10  |   CIFAR100  |   INAT18  |   CIFAR10  |   CIFAR100  |   INAT18|
+|--------|--------|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|
+|ERM  |   RESNET50  |   23.5M  |   97.54  |   85.58  |   64.19  |   -  |   -  |   -|
+|ERM  |   RESNET50W2  |   93.9M  |   97.76  |   87.13  |   66.72  |   -  |   -  |   -|
+|ERM  |   RESNET50W4  |   375M  |   97.88  |   87.95  |   66.99  |   -  |   -  |   -|
+|ERM  |   2×RESNET50  |   47M  |   97.39  |   85.77  |   62.57  |   -  |   -  |   -|
+|ERM  |   4×RESNET50  |   94M  |   97.38  |   85.56  |   61.58  |   -  |   -  |   -|
+|CAT2  |   2×RESNET50  |   47M  |   97.56  |   86.04  |   64.49  |   97.87  |   87.07  |   66.96|
+|CAT4  |   4×RESNET50  |   94M  |   97.53  |   86.54  |   64.54  |   98.14  |   88.00  |   68.42|
+|CAT5  |   5×RESNET50  |   118M  |   97.57  |   86.46  |   64.86  |   98.19  |   88.11  |   68.48|
+|CAT10  |   10×RESNET50  |   235M  |   97.19  |   86.65  |   64.39  |   98.17  |   88.50  |   69.07|
+|DISTILL5  |   RESNET50  |   23.5M  |   97.07  |   85.31  |   64.17  |   -  |   -  |   -|
+
+ -->
 ## Supervised transfer learning (ViT)
 
-### Download (Imagenet21k) pretrained & (ImageNet1k) finetuned checkpoints:
+### Download (Imagenet21k) pretrained & (ImageNet1k) finetuned ViT checkpoints according to [download_checkpoint.md](download_checkpoint.md)
+
+The resulting folder structure looks like:
 
 ```
 📦 RRL
@@ -112,34 +112,8 @@ The resulting folder structure should be:
 
 ```
 
-#### Download VIT pretrained [checkpoints](https://github.com/google-research/vision_transformer):
-```
-mkdir checkpoints/vitaugreg/imagenet21k -p
-wget https://storage.googleapis.com/vit_models/augreg/L_16-i21k-300ep-lr_0.001-aug_strong1-wd_0.1-do_0.0-sd_0.0.npz -O checkpoints/supervised_pretrain/vitaugreg/imagenet21k/ViT-L_16.npz
-wget https://storage.googleapis.com/vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz -O checkpoints/supervised_pretrain/vitaugreg/imagenet21k/ViT-B_16.npz
-
-mkdir checkpoints/vit/imagenet21k -p
-wget https://storage.googleapis.com/vit_models/imagenet21k/ViT-L_16.npz -O checkpoints/supervised_pretrain/vit/imagenet21k/ViT-L_16.npz
-wget https://storage.googleapis.com/vit_models/imagenet21k/ViT-B_16.npz -O checkpoints/supervised_pretrain/vit/imagenet21k/ViT-B_16.npz
-
-```
-
-#### Download VIT (Imagenet1k) fine-tuned [checkpoints](https://github.com/google-research/vision_transformer):
-```
-
-mkdir checkpoints/vitaugreg/imagenet21k/imagenet2012 -p
-wget https://storage.googleapis.com/vit_models/augreg/L_16-i21k-300ep-lr_0.001-aug_strong1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.01-res_384.npz -O checkpoints/vitaugreg/imagenet21k/imagenet2012/ViT-L_16.npz
-wget https://storage.googleapis.com/vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0--imagenet2012-steps_20k-lr_0.03-res_384.npz -O checkpoints/vitaugreg/imagenet21k/imagenet2012/ViT-B_16.npz
-
-mkdir checkpoints/vit/imagenet21k/imagenet2012 -p
-wget https://storage.googleapis.com/vit_models/imagenet21k+imagenet2012/ViT-L_16.npz -O checkpoints/vit/imagenet21k/imagenet2012/ViT-L_16.npz
-wget https://storage.googleapis.com/vit_models/imagenet21k+imagenet2012/ViT-B_16.npz -O checkpoints/vit/imagenet21k/imagenet2012/ViT-B_16.npz
-
-```
-
 
 ### Transfer by Linear Probing
-
 
 scripts/supervised_transfer/imagenet21k/imagenet/vit.sh
 scripts/supervised_transfer/imagenet21k/imagenet/vitaugreg.sh
@@ -216,11 +190,9 @@ https://dl.fbaipublicfiles.com/vissl/model_zoo/seer_finetuned/seer_regnet256_fin
 ```
 
 
-### transfer
-#### Linear probing
+## Meta-learning & few-shots learning and Out-of-distribution generalization
+If you are further interested in the rest few-shots learning and out-of-distribution generalization code, please let me know by leaving a comment. 
 
-
-#### fine-tuning and two-stage fine-tuning
 
 ## Citation
 If you find this code useful for your research, please consider citing our work:

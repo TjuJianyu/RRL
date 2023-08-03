@@ -14,7 +14,7 @@ for wd in 1e-6 1e-5 1e-4;
 do 
 	for run in 0 1 2 3 4 5 6 7 8 9;
 	do 
-			for model in resnet50 resnet152;
+			for model in resnet50;
 			do 
 				for data in  inaturalist18; 
 				do 	
@@ -40,16 +40,15 @@ mkdir ${resdir} -p
 EXPERIMENT_PATH=$resdir
 
 srun --output=${EXPERIMENT_PATH}/%j.out --error=${EXPERIMENT_PATH}/%j.err python supervised.py  --dump_path ${resdir}  \
---arch ${final_model}  \
---pretrained results/supervised/imagenet/run${final_run}/checkpoint.pth.tar \
+--tag supervisedimagenet_resnet50_run${final_run} \
 --data_name ${final_data}  --classifier linear --batch_size 32  --data_path data/inaturalist18/   --wd ${final_wd} \
 --exp_mode lineareval --nesterov True --wd_skip_bn True \
 --headinit normal --use_bn True  --eval_freq 1 --sync_bn True  || scontrol requeue $SLURM_JOB_ID
 
-srun python supervised.py  --dump_path ${resdir}  \
---arch ${final_model}  \
---pretrained results/supervised/imagenet/run${final_run}/checkpoint.pth.tar \
---data_name ${final_data}  --classifier linear --batch_size 32 --data_path data/inaturalist18/   --wd ${final_wd} \
---exp_mode save_val_prob --nesterov True --wd_skip_bn True \
---headinit normal --use_bn True  --eval_freq 1 --sync_bn True  || scontrol requeue $SLURM_JOB_ID
+# srun python supervised.py  --dump_path ${resdir}  \
+# --arch ${final_model}  \
+# --pretrained results/supervised/imagenet/run${final_run}/checkpoint.pth.tar \
+# --data_name ${final_data}  --classifier linear --batch_size 32 --data_path data/inaturalist18/   --wd ${final_wd} \
+# --exp_mode save_val_prob --nesterov True --wd_skip_bn True \
+# --headinit normal --use_bn True  --eval_freq 1 --sync_bn True  || scontrol requeue $SLURM_JOB_ID
 

@@ -52,8 +52,8 @@ mkdir ${resdir} -p
 EXPERIMENT_PATH=$resdir
 
 srun --output=${EXPERIMENT_PATH}/%j.out --error=${EXPERIMENT_PATH}/%j.err python supervised.py  --dump_path ${resdir} \
---arch ${final_model}  --lr ${final_lr} --scheduler_type cosine --final_lr 0.0000001 --epoch ${final_epoch} \
---pretrained results/supervised/imagenet/resnet50_synt5/checkpoint270.pth.tar \
+--tag supervisedimagenet_resnet50_distill5 \
+--lr ${final_lr} --scheduler_type cosine --final_lr 0.0000001 --epoch ${final_epoch} \
 --data_name ${final_data}  --classifier linear --batch_size ${final_bs}  --data_path data  --wd ${final_wd} \
 --exp_mode finetune --nesterov False --wd_skip_bn True \
 --headinit none  --use_bn False  --tf_name 224px --eval_freq 1 --sync_bn True || scontrol requeue $SLURM_JOB_ID
