@@ -1,11 +1,3 @@
-# https://github.com/facebookresearch/swav/blob/main/src/utils.py
-# Copyright (c) Facebook, Inc. and its affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-#
-
 import argparse
 from logging import getLogger
 import pickle
@@ -18,13 +10,23 @@ from .logger import create_logger, PD_Stats
 
 import torch.distributed as dist
 
+
+from torch.utils.data.distributed import DistributedSampler
+import numpy as np 
+
+#This function comes from https://github.com/facebookresearch/swav/blob/main/src/utils.py
+logger = getLogger()
 FALSY_STRINGS = {"off", "false", "0"}
 TRUTHY_STRINGS = {"on", "true", "1"}
+def count_update_params(model):
+    nparams = 0
+    for name, param in model.named_parameters():
+            if param.requires_grad == True:
+                nparams += param.numel()
+                #print(name)
+    return nparams
 
-
-logger = getLogger()
-
-
+#This function comes from https://github.com/facebookresearch/swav/blob/main/src/utils.py               
 def bool_flag(s):
     """
     Parse boolean arguments from the command line.
@@ -36,35 +38,15 @@ def bool_flag(s):
     else:
         raise argparse.ArgumentTypeError("invalid value for a boolean flag")
 
-def add_weight_decay(model, weight_decay=1e-5, bnname='bn', skip_list=()):
-    decay = []
-    no_decay = []
-    for name, param in model.named_parameters():
-        if not param.requires_grad:
-            continue
-        if bnname in name.lower() or name in skip_list:
-            print(name)
-            no_decay.append(param)
-        else:
-            decay.append(param)
-    return [
-        {'params': no_decay, 'weight_decay': 0.},
-        {'params': decay, 'weight_decay': weight_decay}]
 
- 
+#Modified from https://github.com/facebookresearch/swav/blob/main/src/utils.py
 def init_distributed_mode(args):
     """
     Initialize the following variables:
         - world_size
         - rank
     """
-    if args.debug:
-        #print(torch.cuda.device_count())
-        #if torch.cuda.device_count() > 1: 
-        #    os.environ['CUDA_VISIBLE_DEVICES']='1'
-        #else:
-        #    os.environ['CUDA_VISIBLE_DEVICES']='0'
-        #print(torch.cuda.device_count())
+    if args.debug or:
         dist.init_process_group(backend="nccl",
         init_method='tcp://127.0.0.1:%d' % (2000 + np.random.randint(20000)),
         world_size=1,
@@ -121,6 +103,7 @@ def init_distributed_mode(args):
     return
 
 
+#This function comes from https://github.com/facebookresearch/swav/blob/main/src/utils.py
 def initialize_exp(params, *args, dump_params=True):
     """
     Initialize the experience:
@@ -160,6 +143,7 @@ def initialize_exp(params, *args, dump_params=True):
     return logger, training_stats
 
 
+#This function comes from https://github.com/facebookresearch/swav/blob/main/src/utils.py
 def restart_from_checkpoint(ckp_paths, run_variables=None, **kwargs):
     """
     Re-start from checkpoint
@@ -185,18 +169,18 @@ def restart_from_checkpoint(ckp_paths, run_variables=None, **kwargs):
     # key is what to look for in the checkpoint file
     # value is the object to load
     # example: {'state_dict': model}
+    
     for key, value in kwargs.items():
         if key in checkpoint and value is not None:
             try:
-                #print('------')
-                #print(value)
-                #print(checkpoint[key])
                 msg = value.load_state_dict(checkpoint[key], strict=False)
                 print(msg)
             except TypeError:
                 msg = value.load_state_dict(checkpoint[key])
             #print(checkpoint[key])
             print(value)
+            #print(key,value)
+
             logger.info("=> loaded {} from checkpoint '{}'".format(key, ckp_path))
         else:
             logger.warning(
@@ -210,6 +194,7 @@ def restart_from_checkpoint(ckp_paths, run_variables=None, **kwargs):
                 run_variables[var_name] = checkpoint[var_name]
 
 
+#This function comes from https://github.com/facebookresearch/swav/blob/main/src/utils.py
 def fix_random_seeds(seed=31):
     """
     Fix random seeds.
@@ -219,6 +204,7 @@ def fix_random_seeds(seed=31):
     np.random.seed(seed)
 
 
+#This function comes from https://github.com/facebookresearch/swav/blob/main/src/utils.py
 class AverageMeter(object):
     """computes and stores the average and current value"""
 
@@ -238,6 +224,7 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
+#This function comes from https://github.com/facebookresearch/swav/blob/main/src/utils.py
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
     with torch.no_grad():
@@ -257,6 +244,25 @@ def accuracy(output, target, topk=(1,)):
             else:
                 res.append(torch.Tensor([0]).float().to(correct.get_device()))
         return res
+
+
+def add_weight_decay(model, weight_decay=1e-5, bnname='bn', skip_list=()):
+    decay = []
+    no_decay = []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        if bnname in name.lower() or name in skip_list:
+            print(name)
+            no_decay.append(param)
+        else:
+            decay.append(param)
+    return [
+        {'params': no_decay, 'weight_decay': 0.},
+        {'params': decay, 'weight_decay': weight_decay}]
+
+
+
 def add_slurm_params(parser):
     #########################
     #### slurm parameters ###
@@ -272,12 +278,13 @@ def add_slurm_params(parser):
     parser.add_argument('--gres',default=None,type=str,help='gres')
     parser.add_argument('--exclude',default=None,type=str,help='exclude')
     parser.add_argument('--job_name',default='submitit',type=str,help='jobname')
+    #parser.add_argument('--gputype',default=None,type=str,help='gpu type')
+    parser.add_argument('--account',default=None,type=str,help='slurm account')
+    parser.add_argument('--server',default='nyu',type=str,help='slurm account')
     
+
     return parser
 
-
-from torch.utils.data.distributed import DistributedSampler
-import numpy as np 
 
 class DistributedWeightedSampler(DistributedSampler):
     def __init__(self,*args, **kwargs):
@@ -313,8 +320,6 @@ class DistributedWeightedSampler(DistributedSampler):
 
 
 
-
-
 class DistributedSequenceSampler(DistributedSampler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args,**kwargs)
@@ -328,7 +333,6 @@ class DistributedSequenceSampler(DistributedSampler):
         indices = idx[self.rank * per_size: (self.rank+1) * per_size ]
         
         return iter(indices)
-
 
 
 class DistributedGroupSampler(DistributedSampler):
@@ -376,13 +380,108 @@ class DistributedGroupSampler(DistributedSampler):
 
         #@indices = indices[:int(len(indices)//10)]
         return iter(indices)
+        
+def get_dataloader(train_dataset, val_dataset, datamsg, args):
+    if 'save' in args.exp_mode.lower():
+            sampler = DistributedSequenceSampler(train_dataset, shuffle=False)
+            val_sampler = DistributedSequenceSampler(val_dataset, shuffle=False)
+        
+    elif args.reweight_path is not None:
+        sampler = DistributedWeightedSampler(train_dataset, shuffle=True)
+        weights = np.load(args.reweight_path, allow_pickle=True)
+        sampler.set_weights(weights / weights.sum())
+        val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
+    # elif args.ood_method  in ['irm']:
+    #     sampler = DistributedGroupSampler(groups=datamsg['traingroup'], n_groups_per_batch=2,batch_size=args.batch_size, dataset=train_dataset, shuffle=True,)
+    #     val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
+    else:
+        seed = np.random.randint(99999)
+        print(f'dataloader seed {seed}')
+        sampler = torch.utils.data.distributed.DistributedSampler(train_dataset, seed = seed)       
+        val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
+    
+
+    train_loader = torch.utils.data.DataLoader(train_dataset,sampler=sampler,batch_size=args.batch_size,
+                                                num_workers=args.workers,pin_memory=True,)
+    
+    val_loader = torch.utils.data.DataLoader(val_dataset,sampler = val_sampler,batch_size=args.batch_size,
+                                                num_workers=args.workers,pin_memory=True,)
+    
+    #additional validation loaders 
+    additional_loaders = {}
+    for key in datamsg: 
+        if 'data' in key:
+            sampler = torch.utils.data.distributed.DistributedSampler(datamsg[key], shuffle=False)
+            additional_loaders[key]=torch.utils.data.DataLoader(datamsg[key], sampler=sampler, batch_size=args.batch_size,
+                                                                num_workers=args.workers, pin_memory=True) 
+            #logger.info(f'Building {key} done')
+
+    return train_loader, val_loader, additional_loaders        
 
 
 
 
+def optimizer_config(classifier, args, logger, 
+        bn_reg = lambda x: 'bn' in x,
+        head_reg = lambda x: 'classifier' in x, 
+        trunk_reg = lambda x: True):
 
+    # group parameters into backbone(trunk), head classifier, and batchnorm related.
+    head_parameters,trunk_parameters,trunk_bn_parameters = [], [], []
+    head_names,trunk_names, trunk_bn_names = [],[],[]
+    for name, param in classifier.named_parameters():
+        if not param.requires_grad:
+            continue 
+        
+        if bn_reg(name):
+            trunk_bn_parameters.append(param)
+            trunk_bn_names.append(name)
+        elif head_reg(name):
+            head_parameters.append(param)
+            head_names.append(name)
+        elif trunk_reg(name):
+            trunk_parameters.append(param)
+            trunk_names.append(param)
+        else:
+            warnings.warn(f'{name} not in any of bn_reg, head_reg, trunk_reg')
 
+    logger.info('batchnorm parameters')
+    logger.info(trunk_bn_names)
+    logger.info('classifier parameters')
+    logger.info(head_names)
+    logger.info('backbone parameters')
+    logger.info(trunk_names)
 
+    parameter_groups = [{'params': trunk_bn_parameters, 'weight_decay': 0 if args.wd_skip_bn else args.wd},
+             {'params': trunk_parameters, 'weight_decay': args.wd},
+             {'params': head_parameters, 'lr': args.lr_last_layer if args.lr_last_layer is not None else args.lr,'weight_decay': args.wd}]
+
+    assert args.nesterov == False or args.optimizer.lower() == 'sgd'
+    
+    if args.optimizer.lower() == 'sgd':
+        optimizer = torch.optim.SGD(
+            parameter_groups,
+            lr=args.lr,
+            nesterov=args.nesterov,
+            momentum=args.momentum,
+            weight_decay=0, # set it to 0. weight decay is already setted in add_weight_decay function. 
+        )
+        
+    elif args.optimizer.lower() == 'adam':
+        optimizer = torch.optim.Adam(
+            parameter_groups,
+            lr=args.lr,
+            betas=[args.momentum, args.beta2],
+            weight_decay=0, # set it to 0. weight decay is already setted in add_weight_decay function. 
+        )
+    # elif args.optimizer.lower() == 'lion':
+
+    #     optimizer = Lion(parameter_groups,
+    #         lr=args.lr,
+    #         betas=[args.momentum, args.beta2],
+    #         weight_decay=0, # set it to 0. weight decay is already setted in add_weight_decay function. 
+    #     )
+    return optimizer
 
 
 

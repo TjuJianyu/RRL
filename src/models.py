@@ -1,15 +1,24 @@
 from classy_vision.models import build_model as build_model 
 from classy_vision.models import  RegNet as ClassyRegNet
 
+import numpy as np 
 import logging
 from typing import List, Tuple
+from collections import OrderedDict
+
+#import clip
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.utils.weight_norm import WeightNorm
-from collections import OrderedDict
+#from torch.nn.utils.weight_norm import WeightNorm
 import torchvision.models as models
-from .resnet_cifar import ResNet18
+from .resnet_cifar import ResNet18 #,ResNet18linear, ResNet18fix1st, ResNet18fix1stbn, ResNet18fix1stbneval,IIResNet18fix1stbneval
+from .visiontransformer.modeling import VisionTransformer, CONFIGS, np2th
+#from .utils import count_update_params
+#from .vgg import vgg16_bn
+import math
+
 # copied from https://github.com/facebookresearch/vissl/blob/9551cfb490704ac151b2067b43ea595cda1adf4b/vissl/models/model_helpers.py#L38
 def transform_model_input_data_type(model_input, input_type: str):
 	"""
@@ -107,10 +116,7 @@ class RegNet(nn.Module):
 		output = self._feature_blocks(model_input)
 		return output 
 
-
 #https://github.com/facebookresearch/swav/blob/main/src/resnet50.py
-
-
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
 	"""3x3 convolution with padding"""
 	return nn.Conv2d(
@@ -124,12 +130,12 @@ def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
 		dilation=dilation,
 	)
 
-
+#https://github.com/facebookresearch/swav/blob/main/src/resnet50.py
 def conv1x1(in_planes, out_planes, stride=1):
 	"""1x1 convolution"""
 	return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
-
+# modified from https://github.com/facebookresearch/swav/blob/main/src/resnet50.py
 class BasicBlock(nn.Module):
 	expansion = 1
 	__constants__ = ["downsample"]
@@ -173,13 +179,12 @@ class BasicBlock(nn.Module):
 
 		if self.downsample is not None:
 			identity = self.downsample(x)
-
 		out += identity
 		out = self.relu(out)
 
 		return out
 
-
+# modified from https://github.com/facebookresearch/swav/blob/main/src/resnet50.py
 class Bottleneck(nn.Module):
 	expansion = 4
 	__constants__ = ["downsample"]
@@ -227,12 +232,13 @@ class Bottleneck(nn.Module):
 		if self.downsample is not None:
 			identity = self.downsample(x)
 
+
 		out += identity
 		out = self.relu(out)
 
 		return out
 
-
+# modified from https://github.com/facebookresearch/swav/blob/main/src/resnet50.py
 class ResNet(nn.Module):
 	def __init__(
 			self,
@@ -247,17 +253,20 @@ class ResNet(nn.Module):
 			normalize=False,
 			output_dim=0,
 			hidden_mlp=0,
-			nmb_prototypes=0,
+			#nmb_prototypes=0,
 			eval_mode=False,
+			#shortcut=(None,None,None),
+			fs = [None, None],
+			smallimage=False,
 	):
 		super(ResNet, self).__init__()
 		if norm_layer is None:
 			norm_layer = nn.BatchNorm2d
 		self._norm_layer = norm_layer
-
+		self.fs = fs 
 		self.eval_mode = eval_mode
 		self.padding = nn.ConstantPad2d(1, 0.0)
-
+		#self.shortcut = shortcut
 		self.inplanes = width_per_group * widen
 		self.dilation = 1
 		if replace_stride_with_dilation is None:
@@ -274,14 +283,20 @@ class ResNet(nn.Module):
 
 		# change padding 3 -> 2 compared to original torchvision code because added a padding layer
 		num_out_filters = width_per_group * widen
-		self.conv1 = nn.Conv2d(
-			3, num_out_filters, kernel_size=7, stride=2, padding=2, bias=False
-		)
+		
+		self.smallimage = smallimage
+		if self.smallimage: # and not max pool
+			self.conv1 = nn.Conv2d(3, num_out_filters, kernel_size=3, stride=1, padding=1, bias=False)
+		else:
+			self.conv1 = nn.Conv2d(
+				3, num_out_filters, kernel_size=7, stride=2, padding=2, bias=False
+			)
 		self.bn1 = norm_layer(num_out_filters)
 		self.relu = nn.ReLU(inplace=True)
 		self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 		self.layer1 = self._make_layer(block, num_out_filters, layers[0])
 		num_out_filters *= 2
+		
 		self.layer2 = self._make_layer(
 			block, num_out_filters, layers[1], stride=2, dilate=replace_stride_with_dilation[0]
 		)
@@ -312,11 +327,11 @@ class ResNet(nn.Module):
 			)
 
 		# prototype layer
-		self.prototypes = None
-		if isinstance(nmb_prototypes, list):
-			self.prototypes = MultiPrototypes(output_dim, nmb_prototypes)
-		elif nmb_prototypes > 0:
-			self.prototypes = nn.Linear(output_dim, nmb_prototypes, bias=False)
+		# self.prototypes = None
+		# if isinstance(nmb_prototypes, list):
+		# 	self.prototypes = MultiPrototypes(output_dim, nmb_prototypes)
+		# elif nmb_prototypes > 0:
+		# 	self.prototypes = nn.Linear(output_dim, nmb_prototypes, bias=False)
 
 		for m in self.modules():
 			if isinstance(m, nn.Conv2d):
@@ -382,21 +397,23 @@ class ResNet(nn.Module):
 		x = self.conv1(x)
 		x = self.bn1(x)
 		x = self.relu(x)
-		x = self.maxpool(x)
+		if not self.smallimage:
+			x = self.maxpool(x)
 		x = self.layer1(x)
-		#print(self.layer1)
-
 		x = self.layer2(x)
 		x = self.layer3(x)
 		x = self.layer4(x)
-
 		if self.eval_mode:
 			return x
 
 		x = self.avgpool(x)
 		x = torch.flatten(x, 1)
 
-		return x
+		if self.fs[0] is not None and self.fs[1] is not None: 
+			return x[:,self.fs[0]:self.fs[1]]
+		else:
+			return x
+		
 
 	def forward_head(self, x):
 		if self.projection_head is not None:
@@ -405,8 +422,8 @@ class ResNet(nn.Module):
 		if self.l2norm:
 			x = nn.functional.normalize(x, dim=1, p=2)
 
-		if self.prototypes is not None:
-			return x, self.prototypes(x)
+		# if self.prototypes is not None:
+		# 	return x, self.prototypes(x)
 		return x
 
 	def forward(self, inputs):
@@ -427,20 +444,6 @@ class ResNet(nn.Module):
 		return self.forward_head(output)
 
 
-class MultiPrototypes(nn.Module):
-	def __init__(self, output_dim, nmb_prototypes):
-		super(MultiPrototypes, self).__init__()
-		self.nmb_heads = len(nmb_prototypes)
-		for i, k in enumerate(nmb_prototypes):
-			self.add_module("prototypes" + str(i), nn.Linear(output_dim, k, bias=False))
-
-	def forward(self, x):
-		out = []
-		for i in range(self.nmb_heads):
-			out.append(getattr(self, "prototypes" + str(i))(x))
-		return out
-
-
 def resnet50(**kwargs):
 	return ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
 
@@ -456,97 +459,192 @@ def resnet50w4(**kwargs):
 def resnet50w5(**kwargs):
 	return ResNet(Bottleneck, [3, 4, 6, 3], widen=5, **kwargs)
 
-def get_model(name, skip_pool=False):
 
-	if 'regnet' in name:
-		def model_loader(path, args):
-			state_dict = torch.load(path, map_location = "cpu")
-			#head = state_dict['classy_state_dict']['base_model']['model']['heads']
-			state_dict = state_dict['classy_state_dict']['base_model']['model']['trunk']
+class ViT(VisionTransformer):
+	def __init__(self, config, img_size=224, num_classes=1, vis=False):
+		super(ViT, self).__init__(config=config, img_size=img_size,num_classes=num_classes, zero_head=True, vis=vis)
+  
+	def forward(self,x):
+		rep, _ = self.transformer(x)
+		return rep[:, 0]
+
+class ModelWrapper(torch.nn.Module):
+	def __init__(self, model, feature_dim, num_classes, normalize=False, initial_weights=None):
+		super(ModelWrapper, self).__init__()
+		self.model = model
+		self.classification_head = torch.nn.Linear(feature_dim, num_classes)
+		self.normalize = normalize
+		if initial_weights is None:
+			initial_weights = torch.zeros_like(self.classification_head.weight)
+			torch.nn.init.kaiming_uniform_(initial_weights, a=math.sqrt(5))
+		self.classification_head.weight = torch.nn.Parameter(initial_weights.clone())
+		self.classification_head.bias = torch.nn.Parameter(
+			torch.zeros_like(self.classification_head.bias))
+
+		# Note: modified. Get rid of the language part.
+		if hasattr(self.model, 'transformer'):
+			delattr(self.model, 'transformer')
+
+	def forward(self, images, return_features=False):
+		features = self.model.encode_image(images)
+		#print(features.norm(dim=-1, keepdim=True).mean())
+		if self.normalize:
+			features = features / features.norm(dim=-1, keepdim=True)
 			
-			#if args.headinit == 'cat_weights':
-			#	return state_dict, [ head['0.clf.0.weight'],head['0.clf.0.bias'] ]
+		logits = self.classification_head(features)
+		if return_features:
+			return logits, features
+		return logits
 
+def get_model_from_sd(state_dict, base_model):
+	feature_dim = state_dict['classification_head.weight'].shape[1]
+	num_classes = state_dict['classification_head.weight'].shape[0]
+	model = ModelWrapper(base_model, feature_dim, num_classes, normalize=True)
+	for p in model.parameters():
+		p.data = p.data.float()
+	model.load_state_dict(state_dict)
+	model = model.cuda()
+	devices = [x for x in range(torch.cuda.device_count())]
+	return model 
+
+def get_model(name, skip_pool=False, pretrain_path=None, img_dim=None):
+	
+	accept_models = ['regnet_y_32gf', 'regnet_y_64gf', 'regnet_y_128gf','regnet_y_256gf',\
+					'resnet50', '2resnet50', '4resnet50', 'resnet50w2','resnet50w4','resnet50w5',\
+					'resnet152',\
+					'resnet18','resnet50w2','resnet50w4','2resnet18','4resnet18']
+	
+	assert name in accept_models, f'{name} not in  accept_models {accept_models}'
+	
+	# if name.lower().startswith('clip'):
+	# 	clip_model_name = name[len('clip'):].lower()
+	# 	if clip_model_name == 'vit-b/32':
+	# 		model, preprocess = clip.load('ViT-B/32', 'cpu', jit=False)
+	# 	else:
+	# 		raise NotImplementedError
+	# 	state_dict = torch.load(pretrain_path, map_location=torch.device('cpu'))
+	# 	model = get_model_from_sd(state_dict, model)
+	# 	model.classification_head = nn.Identity() 
+	# 	feat_dim = 512
+	# 	msg = f'clip {name} done' 
+	# 	return model, msg, feat_dim
+
+	if 'regnet' in name.lower():
+		
+		def model_loader(path, args=None):
+			state_dict = torch.load(path, map_location = "cpu")
+			state_dict = state_dict['classy_state_dict']['base_model']['model']['trunk']
 			return state_dict, None 
+
 
 		if name == 'regnet_y_32gf':
 			model = RegNet({'name':'regnet_y_32gf'}, skip_pool=skip_pool)
 			feat_dim = 3712
-			return model, model_loader, feat_dim
-
-		if name == 'regnet_y_64gf':
+			
+		elif name == 'regnet_y_64gf':
 			model = RegNet({'name':'regnet_y_64gf'}, skip_pool=skip_pool)
 			feat_dim = 4920
-			return model, model_loader, feat_dim
-
-		if name == 'regnet_y_128gf':
+			
+		elif name == 'regnet_y_128gf':
 			model = RegNet({'name':'regnet_y_128gf'}, skip_pool=skip_pool)
 			feat_dim = 7392
-			return model, model_loader, feat_dim
-
-		if name == 'regnet_y_256gf':
+			
+		elif name == 'regnet_y_256gf':
 			model = RegNet({'depth': 27,
 							'w_0': 640,
 							'w_a': 230.83,
 							'w_m': 2.53,
 							'group_width': 373}, skip_pool=skip_pool)	 
 			feat_dim = 10444
-			return model, model_loader, feat_dim
-		if name.lower() == 'regnet_y_30b':
-			pass
+			
+		else:
+			raise NotImplementedError
 
-	
-	elif 'resnet' in name:
-		def model_loader(path,args):
+		if pretrain_path is not None:
+			state_dict, _ = model_loader(pretrain_path)
+			msg = model.load_state_dict(state_dict, strict = False)
+		else:
+			msg = "model is initialized without loading weights"
+		return model, msg, feat_dim
+
+	elif 'resnet' in name.lower():
+
+		def model_loader(path,args=None):
 			state_dict = torch.load(path,map_location = 'cpu')
+			
 			state_dict = state_dict['state_dict'] if 'state_dict' in state_dict else state_dict
 			new_state_dict = {}
 			for key in state_dict:
-				#print(key)
 				if key.startswith("module.model0."):
 					new_state_dict[key.replace('module.model0.','')] = state_dict[key]
 				elif key.startswith("module."):
 					new_state_dict[key.replace('module.','')] = state_dict[key]
-				 
-			#if args.headinit == 'cat_weights':
-			#	return new_state_dict, [new_state_dict['fc.weight'], new_state_dict['fc.bias']]
+				else:
+					new_state_dict[key]=state_dict[key]
+			
 			return new_state_dict, None
+
 		if name.lower() == 'resnet50w5':
 			feat_dim = 2048 * 5 
-			return resnet50w5(output_dim=0, eval_mode= skip_pool), model_loader, feat_dim
-		if name.lower() == 'resnet50w4':
+			model = resnet50w5(output_dim=0, eval_mode= skip_pool)
+
+		elif name.lower() == 'resnet50w4':
 			feat_dim = 2048 * 4
-			return resnet50w4(output_dim=0, eval_mode= skip_pool), model_loader, feat_dim
-		if name.lower() == 'resnet50w2':
+			model =  resnet50w4(output_dim=0, eval_mode= skip_pool)
+
+		elif name.lower() == 'resnet50w2':
 			feat_dim = 2048 * 2
-			return resnet50w2(output_dim=0, eval_mode= skip_pool), model_loader, feat_dim
+			model = resnet50w2(output_dim=0, eval_mode= skip_pool)
 		
-		if name.lower() == '4resnet50':
+		# elif name.lower() == 'resnet50w2_fs0':
+		# 	feat_dim = 2048
+		# 	model = resnet50w2(output_dim=0, eval_mode= skip_pool, fs=[0,feat_dim])
+		# elif name.lower() == 'resnet50w2_fs1':
+		# 	feat_dim = 2048
+		# 	model = resnet50w2(output_dim=0, eval_mode= skip_pool, fs=[feat_dim, 2*feat_dim])
+
+		# elif name.lower() == 'resnet50w4_fs0':
+		# 	feat_dim = 2048
+		# 	model =  resnet50w4(output_dim=0, eval_mode= skip_pool,fs=[0,feat_dim])
+
+		# elif name.lower() == 'resnet50w4_fs1':
+		# 	feat_dim = 2048
+		# 	model =  resnet50w4(output_dim=0, eval_mode= skip_pool,fs=[feat_dim, 2*feat_dim])
+		
+		# elif name.lower() == 'resnet50w4_fs2':
+		# 	feat_dim = 2048
+		# 	model =  resnet50w4(output_dim=0, eval_mode= skip_pool,fs=[2*feat_dim, 3*feat_dim])
+		
+		# elif name.lower() == 'resnet50w4_fs3':
+		# 	feat_dim = 2048
+		# 	model =  resnet50w4(output_dim=0, eval_mode= skip_pool,fs=[3*feat_dim, 4*feat_dim])
+			
+
+		elif name.lower() == '4resnet50':
 			feat_dim = 2048 * 4
 			model = Kmodel([resnet50(output_dim=0, eval_mode= skip_pool),
 							resnet50(output_dim=0, eval_mode= skip_pool),
 							resnet50(output_dim=0, eval_mode= skip_pool),
 							resnet50(output_dim=0, eval_mode= skip_pool)])
 
-			return model, model_loader, feat_dim
-		if name.lower() == '2resnet50':
+		elif name.lower() == '2resnet50':
 			feat_dim = 2048 * 2
 			model = Kmodel([resnet50(output_dim=0, eval_mode= skip_pool),
 							resnet50(output_dim=0, eval_mode= skip_pool)])
 
-			return model, model_loader, feat_dim
-
-		if name.lower() == 'resnet50':
+		elif name.lower() == 'resnet50':
 			feat_dim = 2048 
-			return resnet50(output_dim=0, eval_mode= skip_pool), model_loader, feat_dim
-		if name.lower() == 'resnet152':
+			model = resnet50(output_dim=0, eval_mode= skip_pool)
+
+
+		elif name.lower() == 'resnet152':
 			feat_dim = 2048 
 			model = models.resnet152()
-			#print(model)
 			model.fc = nn.Identity()
-			return model, model_loader, feat_dim
-		if 'resnet18' in name.lower():
-			def model_loader(path,args):
+
+
+		elif 'resnet18' in name.lower():
+			def model_loader(path,args=None):
 				state_dict = torch.load(path,map_location = 'cpu')
 				state_dict = state_dict['state_dict'] if 'state_dict' in state_dict else state_dict
 				new_state_dict = {}
@@ -554,96 +652,119 @@ def get_model(name, skip_pool=False):
 					#print(key)
 					if key.startswith("backbone."):
 						new_state_dict[key.replace('backbone.','')] = state_dict[key]
+					elif key.startswith('module.model0.'):
+						new_state_dict[key.replace('module.model0.','')] = state_dict[key]
 					else:
 						new_state_dict[key] = state_dict[key]
 				return new_state_dict, None  
 			
-			if name.lower().split('_')[0] == 'resnet18':
-				
-				shortcut = (None, None, None) if len(name.split('_')) == 1 else  [int(val) for val in name.split('_')[1].split(':')]
-				feat_dim = 512 if shortcut[2] is None else shortcut[2]
-				
-				
-				model = ResNet18(width=1, avg_pool2d= (not skip_pool), shortcut= shortcut)				
-				return model, model_loader, feat_dim
-
-
-
-
 			if name.lower() == 'resnet18x2' or name.lower() == 'resnet18w2':
 				feat_dim = 512 * 2 
 				model = ResNet18(width=2, avg_pool2d= (not skip_pool))
-				return model, model_loader, feat_dim
-
+				
 			if name.lower() == 'resnet18x4' or name.lower() == 'resnet18w4':
 				feat_dim = 512 * 4
 				model = ResNet18(width=4, avg_pool2d= (not skip_pool))
-				return model, model_loader, feat_dim
-
+				
 			if name.lower() == '2resnet18':
 				feat_dim = 512 * 2 
-				model = Kmodel([ResNet18(width=1, avg_pool2d=(not skip_pool)),
-								ResNet18(width=1, avg_pool2d= (not skip_pool))])
-				return model, model_loader, feat_dim
-
+				net1=ResNet18(width=1, avg_pool2d=(not skip_pool))
+				net2=ResNet18(width=1, avg_pool2d=(not skip_pool))
+				model = Kmodel([net1,net2])
+				
 			if name.lower() == '4resnet18':
 				feat_dim = 512 * 4 
 				model = Kmodel([ResNet18(width=1, avg_pool2d= ~skip_pool),
 								ResNet18(width=1, avg_pool2d= ~skip_pool),
 								ResNet18(width=1, avg_pool2d= ~skip_pool),
 								ResNet18(width=1, avg_pool2d= ~skip_pool)])
-				return model, model_loader, feat_dim
-	
-	elif 'densenet' in name.lower():
-		def model_loader(path,args):
-			state_dict = torch.load(path, map_location='cpu')
-			state_dict = state_dict['algorithm'] if 'algorithm' in state_dict else state_dict
-			new_state_dict = {}
-			for key in state_dict:
-				new_state_dict[key.replace('model.','')]=state_dict[key]
-			return new_state_dict, None 
+			
+		else:
+			raise NotImplementedError
 
-		if name.lower() == 'densenet121':
-			model = models.densenet121(pretrained=False)
-			model.classifier = nn.Identity() 
-			feat_dim = 1024
-			return model, model_loader, feat_dim
+		# for val in model.parameters():
+		# 	print(val)
+		if pretrain_path is not None:
+			state_dict, _ = model_loader(pretrain_path)
 
+			msg = model.load_state_dict(state_dict, strict = False)
+		else:
+			msg = "model is initialized without loading weights"
+		return model, msg, feat_dim
+		
+
+		
+	elif 'vit' in name.lower(): 
+		
+		prenorm = True if name.startswith('prenorm') else False 
+		modelname= name.lower().replace('prenorm','')
+		
+		names = {key.lower():key for key in CONFIGS}
+		if modelname in names: 
+			config = CONFIGS[names[modelname]]
+		else:
+			raise NotImplementedError
+
+		#model = VisionTransformer(config, img_dim, zero_head=True, num_classes=1)
+		model = ViT(config, img_dim)
+		feat_dim = config.hidden_size
+
+		if pretrain_path is not None:
+			model.load_from(np.load(pretrain_path))
+			msg = "model is initialized and loaded"
+		else:
+			msg = "model is initialized without loading weights"
+
+		if prenorm:
+			model.transformer.encoder.encoder_norm = nn.Identity()
+		model.head = nn.Identity()
+		print(model)
+		return model, msg, feat_dim
+
+	else:
+		raise NotImplementedError
 
 def load_classifier(name,classifier, args):
+
 
 	if name == 'cat_weights':
 
 		weight, bias = [], 0 	
 		for path in args.pretrained:
-			state_dict = torch.load(path, map_location='cpu')
-			if 'classy_state_dict' in state_dict:
-				head = state_dict['classy_state_dict']['base_model']['model']['heads']
-				weight.append(head['0.clf.0.weight'])
-				bias += head['0.clf.0.bias']
-			
-			elif 'state_dict' in state_dict:
-			
-				head = state_dict['state_dict']
-				keyworks = ['module.fc', 'fc', 'module.classifier', 'module.classifier.linear']
-
-				find = False 
-				for key in keyworks:
-					if key+'.weight' in head:
-						weight.append(head[key+'.weight'])
-						bias += head[key+'.bias']
-						find = True 
-						break 
-
-				if not find:
-					for key in head:
-						print(key)
-					raise NotImplementedError 
-
+			if path[-3:] == 'npz': # numpy npz checkpoint 
+				checkpoint = np.load(path)
+				w = np2th(checkpoint["head/kernel"]).t()
+				weight.append(w)
+				bias += np2th(checkpoint["head/bias"]).t()
+				print(f'(cat) classifier weights loaded, {w.shape}')
 			else:
-				raise NotImplementedError
+				state_dict = torch.load(path, map_location='cpu')
+				if 'classy_state_dict' in state_dict:
+					head = state_dict['classy_state_dict']['base_model']['model']['heads']
+					weight.append(head['0.clf.0.weight'])
+					bias += head['0.clf.0.bias']
+					
+				elif 'state_dict' in state_dict:
 
-		#print('weights', weight)
+					head = state_dict['state_dict']
+					keyworks = ['module.fc', 'fc', 'module.classifier', 'module.classifier.linear']
+
+					find = False 
+					for key in keyworks:
+						if key+'.weight' in head:
+							weight.append(head[key+'.weight'])
+							bias += head[key+'.bias']
+							find = True 
+							break 
+
+					if not find:
+						for key in head:
+							print(key)
+						raise NotImplementedError 
+
+				else:
+					raise NotImplementedError
+
 		weight = torch.cat(weight, dim= 1)
 		weight /= len(args.pretrained)
 		bias /= len(args.pretrained)
@@ -652,70 +773,141 @@ def load_classifier(name,classifier, args):
 
 		
 		return classifier
+	# elif name == 'avg_weights':
+	# 	weight, bias = 0 , 0 	
+
+	# 	pretrained = args.pretrained if args.headpretrained is None  else args.headpretrained
+	# 	for path in pretrained:
+	# 		if path[-3:] == 'npz': # numpy npz checkpoint 
+	# 			checkpoint = np.load(path)
+	# 			weight += np2th(checkpoint["head/kernel"]).t()
+	# 			bias += np2th(checkpoint["head/bias"]).t()
+	# 			#print('only the last weight and bias is used!!!')
+	# 			print(f'(cat) classifier weights loaded, {weight.shape}')
+	# 		else:
+	# 			state_dict = torch.load(path, map_location='cpu')
+	# 			if 'classy_state_dict' in state_dict:
+	# 				head = state_dict['classy_state_dict']['base_model']['model']['heads']
+	# 				weight += head['0.clf.0.weight']
+	# 				bias += head['0.clf.0.bias']
+				
+	# 			elif 'state_dict' in state_dict:
+
+	# 				head = state_dict['state_dict']
+	# 				keyworks = ['module.fc', 'fc', 'module.classifier', 'module.classifier.linear']
+
+	# 				find = False 
+	# 				for key in keyworks:
+	# 					if key+'.weight' in head:
+	# 						weight += head[key+'.weight']
+	# 						bias += head[key+'.bias']
+	# 						find = True 
+	# 						break 
+
+	# 				if not find:
+	# 					for key in head:
+	# 						print(key)
+	# 					raise NotImplementedError 
+
+	# 			else:
+	# 				raise NotImplementedError
+
+	# 	#print('weights', weight)
+		
+	# 	weight /= len(args.pretrained)
+	# 	bias /= len(args.pretrained)
+	# 	classifier.linear.weight.data = weight 
+	# 	classifier.linear.bias.data = bias 
+
+		
+	# 	return classifier
+
+	# elif name.startswith('weights_'):
+	# 	weight, bias = 0 , 0
+	# 	idx = int(name.split('_')[1])
+	# 	path = args.pretrained[idx]
+	# 	if path[-3:] == 'npz': # numpy npz checkpoint 
+			
+	# 		checkpoint = np.load(path)
+	# 		weight = np2th(checkpoint["head/kernel"]).t()
+	# 		bias = np2th(checkpoint["head/bias"]).t()
+	# 		#print('only the last weight and bias is used!!!')
+	# 		print(f'(cat) classifier weights loaded, {weight.shape}')
+	# 	else:
+	# 		raise NotImplementedError
+
+
+	# 	classifier.linear.weight.data = weight 
+	# 	classifier.linear.bias.data = bias 
+
+		
+	# 	return classifier
 
 	elif name == 'dumped_weights':
 		if type(args.headpretrained) ==  str:
-			state_dict = torch.load(args.headpretrained, map_location='cpu')['state_dict']
-			state_dict = {key.replace('module.',''): state_dict[key] for key in state_dict}
+			if args.headpretrained[-3:] == 'npz':
+				checkpoint = np.load(path)
+				classifier.weight.copy_(np2th(checkpoint["head/kernel"]).t())
+				classifier.bias.copy_(np2th(checkpoint["head/bias"]).t())
+				msg = 'classifier dumped weights loaded'
+			else:
+				state_dict = torch.load(args.headpretrained, map_location='cpu')['state_dict']
+				state_dict = {key.replace('module.classifier.',''): state_dict[key] for key in state_dict}
 
-			msg = classifier.load_state_dict(state_dict)
+				msg = classifier.load_state_dict(state_dict, strict=False)
 			print(msg)
 		else: 
 			weight, bias = [], 0 	
 			for path in args.headpretrained: 
-				head = torch.load(path, map_location='cpu')['state_dict']
-				weight.append(head['linear.weight'] )
-				bias += head['linear.bias']
-				#print(weight)
+				if path[-3:] == 'npz': # numpy npz checkpoint 
+					checkpoint = np.load(path)
+					weight.append(np2th(checkpoint["head/kernel"]).t())
+					bias += np2th(checkpoint["head/bias"]).t()
+				else:
+					head = torch.load(path, map_location='cpu')['state_dict']
+					head = {key.replace('module.classifier.',''): head[key] for key in head}
+					#ƒprint(head)
+					weight.append(head['linear.weight'] )
+					bias += head['linear.bias']
+
 			weight = torch.cat(weight, dim= 1)
-			weight /= len(args.pretrained)
-			bias /= len(args.pretrained)
+			weight /= len(args.headpretrained)
+			bias /= len(args.headpretrained)
 			classifier.linear.weight.data = weight 
 			classifier.linear.bias.data = bias 
 
+
 		return classifier
+	
 	elif name == 'none':
 		return classifier
 	elif name == 'normal':
 		classifier.linear.weight.data.normal_(mean=0.0, std=0.01)
 		classifier.linear.bias.data.zero_()
 		return classifier
+	# elif name.startswith('normal_fanin_scale'):
+	# 	scale = float(name.split('_')[3])
+	# 	in_dim = classifier.linear.weight.data.shape[1]
+	# 	classifier.linear.weight.data.normal_(mean=0.0, std=np.sqrt(1/in_dim))
+	# 	classifier.linear.bias.data.zero_()
+	# 	classifier.linear.weight.data *= scale 
+
+	# 	print(f'classifier weights normal: scale is {scale}, in_dim is {in_dim}')
+
+	# 	return classifier
+	# elif name.startswith('uniform_fanin_scale'):
+	# 	scale = float(name.split('_')[3])
+	# 	in_dim = classifier.linear.weight.data.shape[1]
+	# 	k=np.sqrt(1/in_dim)
+	# 	classifier.linear.weight.data.uniform_(-k,k)
+	# 	classifier.linear.bias.data.uniform_(-k,k)
+	# 	classifier.linear.weight.data *= scale 
+
+	# 	print(f'classifier weights uniform: scale is {scale}, in_dim is {in_dim}')
 
 	else:
+		print(name)
 		raise NotImplementedError
-
-
-# modified from https://github.com/wyharveychen/CloserLookFewShot/blob/master/backbone.py#L22
-class distLinear(nn.Module):
-	def __init__(self, outdim, indim, use_bn):
-		super(distLinear, self).__init__()
-		self.L = nn.Linear( indim, outdim, bias = False)
-		self.bn = None 
-		if use_bn:
-			self.bn = nn.BatchNorm1d(indim)
-
-		self.class_wise_learnable_norm = True  #See the issue#4&8 in the github 
-		if self.class_wise_learnable_norm:	  
-			WeightNorm.apply(self.L, 'weight', dim=0) #split the weight update component to direction and norm	  
-
-		if outdim <=200:
-			self.scale_factor = 2; #a fixed scale factor to scale the output of cos value into a reasonably large input for softmax, for to reproduce the result of CUB with ResNet10, use 4. see the issue#31 in the github 
-		else:
-			self.scale_factor = 10; #in omniglot, a larger scale factor is required to handle >1000 output classes.
-
-	def forward(self, x):
-		if self.bn is not None:
-			x = self.bn(x)
-
-		x_norm = torch.norm(x, p=2, dim =1).unsqueeze(1).expand_as(x)
-		x_normalized = x.div(x_norm+ 0.00001)
-		if not self.class_wise_learnable_norm:
-			L_norm = torch.norm(self.L.weight.data, p=2, dim =1).unsqueeze(1).expand_as(self.L.weight.data)
-			self.L.weight.data = self.L.weight.data.div(L_norm + 0.00001)
-		cos_dist = self.L(x_normalized) #matrix product by forward function, but when using WeightNorm, this also multiply the cosine distance by a class-wise learnable norm, see the issue#4&8 in the github
-		scores = self.scale_factor * (cos_dist) 
-
-		return scores
 
 
 class Kmodel(nn.Module):
@@ -723,31 +915,30 @@ class Kmodel(nn.Module):
 		super(Kmodel, self).__init__()
 		#self.feat_dim = feat_dim
 		self.models = models 
-		self.classifier = None 
+		self.classifier = classifier 
 		for i in range(len(self.models)):
 			setattr(self, 'model%d' % i, self.models[i])
-		if classifier is not None:
-			self.classifier = classifier
-			# if reinit_head:
-			# 	self.classifier.weight.data.normal_(mean=0.0, std=0.01)
-			# 	self.classifier.bias.data.zero_()
+
+	def get_feature(self,x):
+		rep =  torch.cat([model(x) for model in self.models],dim=1)
+		return rep
+	def get_logits(self,x):
+		if self.classifier is not None:
+			return self.classifier(x)
+		else:
+			return x 
 
 	def forward(self,x):
 
-		# output = [model(x) for model in self.models]
-		# for val in output:
-		# 	print(val.shape)
 		rep =  torch.cat([model(x) for model in self.models],dim=1)
-		#print(rep.shape)
+
 		if self.classifier is not None:
 			return self.classifier(rep)
 		else:
 			return rep 
 
-
 class RegLog(nn.Module):
 	"""Creates logistic regression on top of frozen features"""
-
 	def __init__(self, num_labels, feat_dim, use_bn=True, reinit_head=True):
 		super(RegLog, self).__init__()
 		
@@ -757,113 +948,50 @@ class RegLog(nn.Module):
 
 		self.linear = nn.Linear(feat_dim, num_labels)
 		if reinit_head:
-			print('reinit head weights by gaussian(0, 0.01)')
+			print('reinit head weights by gaussian(0, 0.01). To be abandoned.')
 			self.linear.weight.data.normal_(mean=0.0, std=0.01)
 			self.linear.bias.data.zero_()
 
-
 	def forward(self, x):
-		#print(x.shape)
 		# optional BN
 		if self.bn is not None:
 			x = self.bn(x)
-		#print(x.shape)
-		# flatten
 		x = x.view(x.size(0), -1)
 		return self.linear(x)
 
-class MLP2(nn.Module):
-	def __init__(self, num_labels, feat_dim, use_bn=True, hidden_dim=None):
-		super(MLP2, self).__init__()
+
+def get_classifier(classifier_arch, nclass, feat_dims, logger, args):
+	
+	# calculate classifier input dimension
+	if args.richway == 'cat':
+		total_feat_dim = int(np.sum(feat_dims))
+	else:
+		assert np.std(feat_dims) == 0
+		total_feat_dim = int(feat_dims[0])
+
+
+	if classifier_arch == 'linear':
+		classifier = RegLog(nclass, total_feat_dim, args.use_bn, reinit_head=False)
+		classifier = load_classifier(args.headinit, classifier, args)
+	else:
+		raise NotImplementedError
+
+	return classifier
 		
-		self.bn = None 
-		if use_bn:
-			self.bn = nn.BatchNorm1d(feat_dim)
-		hidden_dim = feat_dim if hidden_dim is None else hidden_dim
+def modelfusion(richway, models, classifier, args):
 
-		self.linear1 = nn.Linear(feat_dim, hidden_dim)
-		self.linear2 = nn.Linear(hidden_dim, num_labels)
-		
-	def forward(self, x):
-		#print(x.shape)
-		# optional BN
-		if self.bn is not None:
-			x = self.bn(x)
+	assert 'exp_mode' in args.__dict__ and 'sync_bn' in args.__dict__
 
-		x = x.view(x.size(0), -1)
-		out = F.relu(self.linear1(x))
-		out = self.linear2(out)
+	mappings = {'cat':Kmodel}	
 
-		return out 
+	if args.exp_mode == 'finetune':
+		model = nn.Identity()
+		classifier = mappings[richway](models, classifier)
+	elif args.exp_mode == 'lineareval':
+		model = mappings[richway](models)
 
-class NonLinearClf(nn.Module):
+	if args.sync_bn:
+		classifier = nn.SyncBatchNorm.convert_sync_batchnorm(classifier)
+	
+	return model, classifier
 
-	def __init__(self, num_labels, inplanes, outplanes, feat_dim, convlayers=1,  use_bn=False):
-		super(NonLinearClf, self).__init__()
-		assert use_bn == False 
-		self.convlayers = convlayers
-		self.bn = None 
-		# if use_bn:
-		# 	self.bn = nn.BatchNorm1d(feat_dim)
-
-		self.conv1 = conv1x1(inplanes, outplanes)
-		self.bn1 = nn.BatchNorm2d(outplanes)
-
-		if self.convlayers == 2:
-			self.conv2 = conv3x3(outplanes, outplanes)
-			self.bn2 = nn.BatchNorm2d(outplanes)
-			
-		self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-		self.linear = nn.Linear(feat_dim, num_labels)
-		self.relu = nn.ReLU(inplace=True)
-		#self.linear.weight.data.normal_(mean=0.0, std=0.01)
-		#self.linear.bias.data.zero_()
-
-	def forward(self, x):
-		out = self.conv1(x)
-		out = self.bn1(out)
-		out = self.relu(out)
-
-		if self.convlayers==2:
-			out = self.conv2(out)
-			out = self.bn2(out)
-			out = self.relu(out)
-
-
-		out = self.avgpool(out)
-		out = torch.flatten(out, 1)
-		out = self.linear(out)
-		return out 
-
-class BlockClf(nn.Module):
-	def __init__(self, num_labels, inplanes, outplanes, feat_dim,  use_bn=False):
-		super(BlockClf, self).__init__()
-		assert use_bn == False 
-		
-		self.bn = None 
-		# if use_bn:
-		# 	self.bn = nn.BatchNorm1d(feat_dim)
-		self.block = Bottleneck(inplanes=inplanes, planes = outplanes, stride=2, norm_layer= nn.BatchNorm2d)
-		self.block
-		#self.conv1 = conv1x1(inplanes, outplanes)
-		#self.bn1 = nn.BatchNorm2d(outplanes)
-		self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-		self.linear = nn.Linear(feat_dim, num_labels)
-		self.relu = nn.ReLU(inplace=True)
-		#self.linear.weight.data.normal_(mean=0.0, std=0.01)
-		#self.linear.bias.data.zero_()
-
-	def forward(self, x):
-		out = self.block(x)
-		out = self.avgpool(out)
-		out = torch.flatten(out, 1)
-		out = self.linear(out)
-		return out 
-
-
-
-
-
-
-
-			

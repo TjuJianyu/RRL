@@ -1,6 +1,3 @@
-#import sklearn.metrics
-#import wilds.get_dataset as wilds_get_dataset
-
 import argparse
 import os
 import time
@@ -9,7 +6,7 @@ import warnings
 
 import numpy as np 
 from tqdm import tqdm
-#import submitit
+import yaml 
 
 import torch
 import torch.nn as nn
@@ -28,23 +25,15 @@ from src.utils import (
 	AverageMeter,
 	init_distributed_mode,
 	accuracy,
-	add_weight_decay,
 	add_slurm_params,
-	DistributedWeightedSampler,
-	DistributedSequenceSampler,
-	DistributedGroupSampler,
-	count_update_params,
 	get_dataloader,
 	optimizer_config,
 )
 
 from src.models import get_model, get_classifier, modelfusion
 from src.datasets import get_dataset 
-from src.models import distLinear
-from src.models import RegLog 
-from src.configs import model_configs
+#from src.configs import model_configs
 
-from src.custom_loss import IRM, SD, RSC, Dynamicdropout
 
 
 logger = getLogger()
@@ -54,9 +43,13 @@ def main(args):
 
 	global best_acc
 
-	# loading configs
-	args = model_configs(args.tag, args) if args.tag is not None else args 
-	
+	tags = yaml.load(open('configs/pretrained_checkpoints.yaml'), Loader=yaml.FullLoader)
+
+	if args.tag is not None and args.tag in tags:
+		for key in tags[args.tag]:
+			print(key)
+			setattr(args, key, tags[args.tag][key])
+
 	# distributed training environments and seeds
 	init_distributed_mode(args)
 	fix_random_seeds(args.seed)
@@ -82,8 +75,8 @@ def main(args):
 	for i in range(len(args.arch)):
 	
 		per_model, msg, feat_dim = get_model(args.arch[i], skip_pool=args.skip_pool, \
-		pretrain_path = None if len(args.pretrained)==0 else args.pretrained[i], img_dim=datamsg['img_dim'], \
-		fix1st_pretrain_path = args.fix1st_pretrained ) #e.g. 'regnet_y_32gf'
+		pretrain_path = None if len(args.pretrained)==0 else args.pretrained[i], img_dim=datamsg['img_dim'])
+		#fix1st_pretrain_path = args.fix1st_pretrained ) #e.g. 'regnet_y_32gf'
 		logger.info("Load pretrained model with msg: {}".format(msg))
 
 		feat_dims.append(feat_dim)
@@ -91,9 +84,8 @@ def main(args):
 
 	
 	#build classifier
-	classifier = get_classifier(args.classifier, datamsg['nclass'], feat_dims, logger, args)
+	classifier = get_classifier('linear' datamsg['nclass'], feat_dims, logger, args)
 
-	
 	#print(classifier.linear.weight.data)
 	logger.info('classifier {}'.format(classifier))
 	
@@ -101,38 +93,20 @@ def main(args):
 	device = torch.device("cuda:" + str(args.gpu_to_work_on))
 
 	# model is either Identity or backbone. only classifier is trainable
-	model, classifier = modelfusion(args.richway, models, classifier, args)
+	model, classifier = modelfusion('cat', models, classifier, args)
 	model, classifier = model.to(device), classifier.to(device)
 
 	classifier = nn.parallel.DistributedDataParallel(
 		classifier,
 		device_ids=[args.gpu_to_work_on],
-		#find_unused_parameters=True,
 	)
 	
 	optimizer = optimizer_config(classifier, args, logger, \
 		head_reg = lambda x: True if args.exp_mode in ['lineareval','biaslineareval'] else lambda x: 'classifier' in x )
 	logger.info('optimizer {}'.format(optimizer))
 	
-	# if args.ood_method.lower() != 'none':
-	# 	if args.ood_method.lower() == 'irm':
-	# 		ood_criterion = IRM(args.ood_lambda,device=device)
-	# 	elif args.ood_method.lower() == 'sd':
-	# 		ood_criterion = SD(args.ood_lambda, device=device)
-	# 	elif args.ood_method.lower() == 'rsc':
-	# 		ood_criterion = RSC(drop_f = args.drop_f, drop_b= args.drop_b, num_classes = datamsg['nclass'], device=device )
-	# 	elif args.ood_method.lower() == 'dynamicdropout':
-	# 		ood_criterion = Dynamicdropout(drop_f = args.drop_f, drop_b= args.drop_b, num_classes = datamsg['nclass'], device=device )
-		 
-	# 	else:
-	# 		ood_criterion = args.ood_method
-	# 		pass #raise NotImplementedError
-	# else:
-	# 	ood_criterion = None 
 
-	ood_criterion = None #TODO clean ood_criterion and params 
 
-	#logger.info('ood criterion {}'.format(ood_criterion))
 
 	# set scheduler
 	if args.scheduler_type == "step":
@@ -172,6 +146,7 @@ def main(args):
 
 	#cudnn.benchmark = True
 	eval('setattr(torch.backends.cudnn, "benchmark", True)')
+	
 	if args.cuda_deterministic:
 		logger.info("cuda deterministic")
 		eval('setattr(torch.backends.cudnn, "deterministic", True)') 
@@ -251,7 +226,7 @@ def main(args):
 		# set samplers
 		train_loader.sampler.set_epoch(epoch)
 
-		tr_epoch, tr_loss, tr_top1, tr_top5 = train(model, classifier, optimizer, train_loader, epoch, args, ood_criterion)
+		tr_epoch, tr_loss, tr_top1, tr_top5 = train(model, classifier, optimizer, train_loader, epoch, args)
 		scheduler.step()
 
 		if (epoch+1) % args.eval_freq == 0: 
@@ -264,11 +239,6 @@ def main(args):
 					custom_eval_func = getattr(custom_eval, custom_eval_name)
 					custom_eval_results = custom_eval_func(val_loader, model, classifier, args)
 					logger.info(f'{custom_eval_name}: ' + ','.join(['%.4f' % val for val in custom_eval_results]))
-				
-			# loss, top1, top5 = scores_val
-			# scores_val = torch.Tensor(np.array([loss.sum, top1.sum.item(), top5.sum.item(), loss.count, top1.count, top5.count])).cuda(args.gpu_to_work_on)
-			# dist.all_reduce(scores_val, op=dist.ReduceOp.SUM)
-			# scores_val = tuple((scores_val[:3] / scores_val[3:]).detach().cpu().numpy().tolist())
 			
 			# additional validation sets
 			additional_msg = {}
@@ -325,7 +295,7 @@ def main(args):
 				"Top-1 test accuracy: {acc:.1f}".format(acc=best_acc))
 
 
-def train(model, reglog, optimizer, loader,  epoch, args, ood_criterion=None ):
+def train(model, reglog, optimizer, loader,  epoch, args ):
 	"""
 	Train the models on the dataset.
 	"""
@@ -363,83 +333,6 @@ def train(model, reglog, optimizer, loader,  epoch, args, ood_criterion=None ):
 		with torch.no_grad():
 			output = model(inp)
 
-
-		# if ood_criterion is not None:
-		
-		# 	if args.ood_method.lower() == 'balancegrad':
-		# 		output = reglog(output)
-		# 		loss = criterion(output, target) 
-
-		# 		optimizer.zero_grad()
-		# 		loss.backward()
-				
-		# 		norm0, norm1 = 0,0
-		# 		for var in reglog.module.model0.model0.parameters():
-		# 			norm0 += (var.grad **2).sum()
-		# 		for var in reglog.module.model0.model1.parameters():
-		# 			norm1 += (var.grad **2).sum()
-
-		# 		norm0 += (reglog.module.classifier.linear.weight.grad[:,:512] **2).sum()
-		# 		norm1 += (reglog.module.classifier.linear.weight.grad[:,512:] **2).sum()
-		# 		norm0 = norm0.sqrt().item()
-		# 		norm1 = norm1.sqrt().item()
-		# 		norm = (norm0 + norm1)/2
-		# 		#print(norm0, norm1)
-		# 		if iter_epoch % 50 == 0:
-		# 			logger.info("grad norm: %.3f, %.3f" % (norm0, norm1))
-
-		# 		for var in reglog.module.model0.model0.parameters():
-		# 			var.grad *= norm / norm0
-		# 		reglog.module.classifier.linear.weight.grad[:,:512] *= norm /norm0
-				
-		# 		for var in reglog.module.model0.model1.parameters():
-		# 			var.grad *= norm / norm1 
-		# 		reglog.module.classifier.linear.weight.grad[:,512:] *= norm /norm1 
-				
-
-		# 		norm0, norm1 = 0,0
-		# 		for var in reglog.module.model0.model0.parameters():
-		# 			norm0 += (var.grad **2).sum()
-		# 		for var in reglog.module.model0.model1.parameters():
-		# 			norm1 += (var.grad **2).sum()
-
-		# 		norm0 += (reglog.module.classifier.linear.weight.grad[:,:512] **2).sum()
-		# 		norm1 += (reglog.module.classifier.linear.weight.grad[:,512:] **2).sum()
-		# 		norm0 = norm0.sqrt().item()
-		# 		norm1 = norm1.sqrt().item()
-		# 		norm = (norm0 + norm1)/2
-		# 		# #print(norm0, norm1)
-		# 		# if iter_epoch % 50 == 0:
-		# 		# 	print(norm0, norm1)
-		# 		optimizer.step()
-
-		# 	else:
-		# 		if ood_criterion.__class__.__name__.lower() == 'rsc':
-		# 			loss, output = ood_criterion.update(output, reglog.module.get_feature, reglog.module.get_logits, target)
-		# 			#reglog.module.classifier = linearclassifier 
-		# 		elif ood_criterion.__class__.__name__.lower() == 'irm':
-		# 			output = reglog(output)
-		# 			loss = ood_criterion.update(output, target, meta[:,0])
-				
-		# 		elif ood_criterion.__class__.__name__.lower() == 'dynamicdropout':
-		# 			loss, output = ood_criterion.update(output, reglog.module.get_feature, reglog.module.get_logits, target)
-
-		# 		else:
-		# 			output = reglog(output)
-		# 			loss = ood_criterion.update(output, target)
-		# 		optimizer.zero_grad()
-		# 		loss.backward()
-		# 		optimizer.step()
-
-		# else:
-		# 	output = reglog(output)
-		# 	loss = criterion(output, target) 
-
-		# 	# compute the gradients
-		# 	optimizer.zero_grad()
-		# 	loss.backward()
-		# 	optimizer.step()
-
 		output = reglog(output)
 		loss = criterion(output, target) 
 
@@ -447,10 +340,7 @@ def train(model, reglog, optimizer, loader,  epoch, args, ood_criterion=None ):
 		optimizer.zero_grad()
 		loss.backward()
 		optimizer.step()
-		#print('backward done')
-		# step
-		
-		#print('optimization done')
+
 		# update stats
 		acc1, acc5 = accuracy(output, target, topk=(1, 5))
 		losses.update(loss.item(), inp.size(0))
@@ -508,35 +398,22 @@ def validate_network(val_loader, model, classifier, args, indices=None):
 			# move to gpu
 			inp = inp.cuda(non_blocking=True)
 			target = target.cuda(non_blocking=True)
-			#print(target.max())
+
 			# compute output
 			output = classifier(model(inp))
 			
-			#rep = model(inp)[:,:2048]
-			#print(classifier)
-			#print(classifier.weights.shape)
-
-			#inp = model(inp)
-			#rep = classifier.module.model0.model1(inp)
-			#print(rep.shape)
-			#print(classifier.module.classifier.linear.weight.shape)
-			#weights = classifier.module.classifier.linear.weight[:,2048:].T
-			#bias = classifier.module.classifier.linear.bias
-			#print(bias.shape)
-			#output = rep @ weights + bias
-
-			#0/0
+	
 
 
 			if indices is not None:
 				output = output[:,indices]
 
 			loss = criterion(output, target)
-			#print(indices,output)
+	
 			acc1, acc5 = accuracy(output, target, topk=(1, 5))
-			#print(acc1, )
+
 			losses.update(loss.item(), inp.size(0))
-			#losses.update(0, inp.size(0))
+
 			top1.update(acc1[0], inp.size(0))
 			top5.update(acc5[0], inp.size(0))
 
@@ -633,6 +510,9 @@ def custom_params():
 	#########################
 	#### main parameters ####
 	#########################
+	parser.add_argument("--config", type=str, default=None,
+						help="yaml config path")
+	
 	parser.add_argument("--dump_path", type=str, default=".",
 						help="experiment dump path for checkpoints and log")
 	parser.add_argument("--seed", type=int, default=31, help="seed")
@@ -646,26 +526,29 @@ def custom_params():
 						help="number of data loading workers")
 	parser.add_argument("--data_rate", default=1, type=float,
 						help="rate of data to use")
+
 	parser.add_argument("--reweight_path", default=None, type=str, help='path to reweight file')	
-	parser.add_argument("--richway", default='cat', type=str, 
-		help='cat, weightavg, repavg. various ways to enrich the reprensentation')
+	
+
 	parser.add_argument("--custom_eval_func", nargs='*', default=None, type=str, help='custom evaluation function')
 
 	#########################
 	#### model parameters ###
 	#########################
+	
 	parser.add_argument("--tag", default=None, type=str, help='a tag help load --arch, --pretrained parameters')
+	
 	parser.add_argument("--arch",	   default="resnet50", nargs='*', type=str, help="convnet architecture")
 	parser.add_argument("--pretrained", default="",		 nargs='*', type=str, help="path to pretrained weights")
 	
-	parser.add_argument("--classifier_bn2nonbn", default=False, type=bool_flag, help="convert batchnorm + linear to linear")
-	parser.add_argument("--fix1st_pretrained", default="", type=str, help="path to pretrained weights (1st layer). only for *fix1st model")
-	parser.add_argument('--dist_clf', default=False, type=bool_flag,help='use cosine classifier or not ')
+
+	#parser.add_argument("--fix1st_pretrained", default="", type=str, help="path to pretrained weights (1st layer). only for *fix1st model")
+	#parser.add_argument('--dist_clf', default=False, type=bool_flag,help='use cosine classifier or not ')
 	parser.add_argument('--skip_pool', default=False, type=bool_flag,help='skip pool or not ')
 	
 
 	parser.add_argument("--use_bn", default=False, type=bool_flag, help="optionally add a batchnorm layer before the linear classifier")
-	parser.add_argument('--classifier', default='linear', type=str, help='classifier  [linear, convpoollinear_k]')
+	#parser.add_argument('--classifier', default='linear', type=str, help='classifier  [linear, convpoollinear_k]')
 	parser.add_argument('--headinit', default='none', type=str, help='init head: none, dumped_weights, cat_weights, normal')
 	parser.add_argument('--headpretrained', default=None,  nargs='*',type=str, help='path to dumped head weights. It is activate when --headcatinit is dumped_weight')
 	
@@ -679,15 +562,14 @@ def custom_params():
 	#########################
 	#### optim parameters ###
 	########jvihnrbutvvthiguleudcchcjrknunbc#################
-	parser.add_argument("--optimizer", default='sgd', type=str, help='sgd, adam, lion')
+	parser.add_argument("--optimizer", default='sgd', type=str, help='sgd, adam')
 	parser.add_argument("--wd", default=5e-4, type=float, help="weight decay")
 	parser.add_argument("--wd_skip_bn", default=False, type=bool_flag, help="")
 	#parser.add_argument("--nesterov", default=True, type=bool_flag, help="nesterov momentum")
 	parser.add_argument("--nesterov", default=False, type=bool_flag, help="nesterov momentum") #March 7th, 2023. change the default value to False 
-	parser.add_argument("--momentum", default=0.9, type=float, help="momentum in SGD, beta1 in adam, lion")
-	parser.add_argument("--beta2", default=0.99, type=float, help="beta2 in adam, lion")
+	parser.add_argument("--momentum", default=0.9, type=float, help="momentum in SGD, beta1 in adam")
+	parser.add_argument("--beta2", default=0.99, type=float, help="beta2 in adam")
 	
-
 	parser.add_argument("--epochs", default=28, type=int,
 						help="number of total epochs to run")
 	parser.add_argument("--batch_size", default=32, type=int,
@@ -723,13 +605,6 @@ def custom_params():
 	#					 help="this argument is not used and should be ignored")
 	parser.add_argument('--debug',action='store_true', help='debug mode')
 	parser.add_argument('--gpu', default=None, type=int, help='gpu to use')
-
-
-	parser.add_argument('--ood_method', default='none', type=str, help='ood methods to use. none, irm, vrex')
-	parser.add_argument('--ood_lambda', default=0, type=float, help='ood weights')
-	#rsc
-	parser.add_argument('--drop_f', default=0.5, type=float, help='drop f')
-	parser.add_argument('--drop_b', default=0.5, type=float, help='drop b')
 	
 	parser.add_argument('--cuda_deterministic', action='store_true',help='cuda deterministic. slow but deterministic')
 	

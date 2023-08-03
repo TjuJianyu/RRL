@@ -2,6 +2,181 @@ import torch
 import torch.nn as nn
 import torch.autograd as autograd
 from wilds.common.utils import split_into_groups
+import numpy as np 
+import torch.nn.functional as F
+class BalanceGrad():
+    def __init__(self, drop_f, drop_b, num_feats, num_classes, device):
+        self.drop_f = (1-drop_f)*100
+        self.drop_b = (1-drop_b)*100
+        self.num_classes = num_classes
+        self.device = device
+        self.criterion = nn.CrossEntropyLoss().cuda()
+        self.prob
+    def update(self, x, featurizer, classifier,y):
+        all_y = y 
+        feat = featurizer(x)
+        logits = classifier(feat)
+        loss = self.criterion(logits, y)
+        grads = autograd.grad(loss, feat)[0]
+
+        
+
+
+        all_o = torch.nn.functional.one_hot(all_y, self.num_classes)
+        # features
+        all_f = featurizer(x)
+        # predictions
+        all_p = classifier(all_f)
+
+        # Equation (1): compute gradients with respect to representation
+        all_g = autograd.grad((all_p * all_o).sum(), all_f)[0]
+
+        # Equation (2): compute top-gradient-percentile mask
+        percentiles = np.percentile(all_g.cpu(), self.drop_f, axis=1)
+        percentiles = torch.Tensor(percentiles)
+        percentiles = percentiles.unsqueeze(1).repeat(1, all_g.size(1))
+        mask_f = all_g.lt(percentiles.to(self.device)).float()
+
+        # Equation (3): mute top-gradient-percentile activations
+        all_f_muted = all_f * mask_f
+
+        # Equation (4): compute muted predictions
+        all_p_muted = classifier(all_f_muted)
+
+        # Section 3.3: Batch Percentage
+        all_s = F.softmax(all_p, dim=1)
+        all_s_muted = F.softmax(all_p_muted, dim=1)
+        changes = (all_s * all_o).sum(1) - (all_s_muted * all_o).sum(1)
+        percentile = np.percentile(changes.detach().cpu(), self.drop_b)
+        mask_b = changes.lt(percentile).float().view(-1, 1)
+        mask = torch.logical_or(mask_f, mask_b).float()
+
+        # Equations (3) and (4) again, this time mutting over examples
+        #print(mask)
+        all_p_muted_again = classifier(all_f * mask)
+        #print(mask)
+        # Equation (5): update
+        loss = F.cross_entropy(all_p_muted_again, all_y)
+
+        return loss, all_p
+        # self.optimizer.zero_grad()
+        # loss.backward()
+        # self.optimizer.step()
+
+        # return {'loss': loss.item()}
+class Dynamicdropout():
+    def __init__(self, drop_f, drop_b, num_classes, device):
+        self.drop_f = (1-drop_f)*100
+        self.drop_b = (1-drop_b)*100
+        self.num_classes = num_classes
+        self.device = device
+        self.criterion = nn.CrossEntropyLoss().cuda()
+        self.dropout = torch.zeros(1024).cuda()
+    def update(self, x, featurizer, classifier,y):
+        
+
+        all_y = y 
+        # features
+        all_f = featurizer(x)
+        # predictions
+        all_p = classifier(all_f)
+        loss = F.cross_entropy(all_p, all_y)
+        all_g = autograd.grad(loss, all_f)[0].sum(axis=0)
+        
+        percentiles = np.percentile(all_g.cpu(), self.drop_f)
+        
+        index = all_g.lt(percentiles).detach().float()
+
+        self.dropout += index
+        #self.dropout /= self.dropout.max() 
+
+        print(self.dropout[:512].mean(), self.dropout[512:].mean())
+
+        #output = classifier(all_f * self.dropout  )
+        #loss = self.criterion(output, all_y)
+
+        output = classifier(all_f)
+        loss = self.criterion(output, all_y)
+        
+
+        return loss, all_p
+        # self.optimizer.zero_grad()
+        # loss.backward()
+        # self.optimizer.step()
+
+        # return {'loss': loss.item()}
+class RSC():
+    def __init__(self, drop_f, drop_b, num_classes, device):
+        self.drop_f = (1-drop_f)*100
+        self.drop_b = (1-drop_b)*100
+        self.num_classes = num_classes
+        self.device = device
+    def update(self, x, featurizer, classifier,y):
+        # device = "cuda" if minibatches[0][0].is_cuda else "cpu"
+
+        # # inputs
+        # all_x = torch.cat([x for x, y in minibatches])
+        # # labels
+        # all_y = torch.cat([y for _, y in minibatches])
+        # one-hot labels
+        all_y = y 
+        all_o = torch.nn.functional.one_hot(all_y, self.num_classes)
+        # features
+        all_f = featurizer(x)
+        # predictions
+        all_p = classifier(all_f)
+
+        # Equation (1): compute gradients with respect to representation
+        all_g = autograd.grad((all_p * all_o).sum(), all_f)[0]
+        
+        # Equation (2): compute top-gradient-percentile mask
+        percentiles = np.percentile(all_g.cpu(), self.drop_f, axis=1)
+        percentiles = torch.Tensor(percentiles)
+        percentiles = percentiles.unsqueeze(1).repeat(1, all_g.size(1))
+        mask_f = all_g.lt(percentiles.to(self.device)).float()
+
+        # Equation (3): mute top-gradient-percentile activations
+        all_f_muted = all_f * mask_f
+
+        # Equation (4): compute muted predictions
+        all_p_muted = classifier(all_f_muted)
+
+        # Section 3.3: Batch Percentage
+        all_s = F.softmax(all_p, dim=1)
+        all_s_muted = F.softmax(all_p_muted, dim=1)
+        changes = (all_s * all_o).sum(1) - (all_s_muted * all_o).sum(1)
+        percentile = np.percentile(changes.detach().cpu(), self.drop_b)
+        mask_b = changes.lt(percentile).float().view(-1, 1)
+        mask = torch.logical_or(mask_f, mask_b).float()
+
+        # Equations (3) and (4) again, this time mutting over examples
+        #print(mask)
+        all_p_muted_again = classifier(all_f * mask)
+        #print(mask)
+        # Equation (5): update
+        loss = F.cross_entropy(all_p_muted_again, all_y)
+
+        return loss, all_p
+        # self.optimizer.zero_grad()
+        # loss.backward()
+        # self.optimizer.step()
+
+        # return {'loss': loss.item()}
+
+
+class SD():
+	def __init__(self,sd_lambda, device,is_training=True  ):
+		self.sd_lambda = sd_lambda
+		self.device = device
+		self.is_training = is_training
+		self.loss = nn.CrossEntropyLoss().to(self.device)
+	def update(self,pred,y,g=None):
+		#assert g is None 
+		loss = self.loss(pred, y)
+		penalty = (pred ** 2).mean()
+
+		return loss + self.sd_lambda * penalty
+
 class IRM():
 	"""docstring for IRM"""
 	def __init__(self, irm_lambda, device,  is_training=True ):

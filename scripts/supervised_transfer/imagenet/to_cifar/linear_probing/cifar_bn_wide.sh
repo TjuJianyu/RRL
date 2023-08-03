@@ -34,8 +34,7 @@ resdir=results/supervised/imagenet/transfer/lineareval_seer/${final_data}_${fina
 mkdir ${resdir} -p
 
 python supervised.py  --dump_path ${resdir} \
---arch ${final_model} \
---pretrained results/supervised/imagenet/${final_model}/checkpoint.pth.tar \
+--tag supervisedimagenet_${final_model} \
 --data_name ${final_data}  --classifier linear --batch_size ${final_bs}  --data_path data --debug  --wd ${final_wd} \
 --exp_mode lineareval --nesterov True --wd_skip_bn True \
 --headinit normal --tf_name 224px --use_bn True  --eval_freq 1  || scontrol requeue $SLURM_JOB_ID
