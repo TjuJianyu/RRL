@@ -85,7 +85,7 @@ Tab1: transfer learning experiments scripts.
 </em>
 </p>
  
-The following figure shows (focus on solid curves) the transfer learning performance of different representations (ERM / CAT / Distill) and transfer methods (pinear probing / Ffne-tuning / two-stage fine-tuning). 
+The following figure shows (focus on solid curves) the transfer learning performance of different representations (ERM / CAT / Distill) and transfer methods (pinear probing / fine-tuning / two-stage fine-tuning). 
 
 <p align="center">
   <image src='figures/imagenet_sl_tf_v4.png'/>
@@ -173,7 +173,7 @@ With the same experiment protocol as Tab1, we can have the following self-superv
 <p align="center">
 <em>
   Fig2: Self-supervised transfer learning with SWAV trained on unlabeled ImageNet(1K) (top row) and with SEER on Instagram1B 
-(bottom row). The constructed rich representation, CATn, yields the best linear probing performance (“cat” and “cat$^sub$”) for supervised
+(bottom row). The constructed rich representation, CATn, yields the best linear probing performance (“cat” and “catsub”) for supervised
 ImageNet, INAT18, CIFAR100, and CIFAR10 target tasks. The two-stage fine-tuning (“[2ft]cat”) matches equivalently sized baseline
 models (“[init]wide” and “[init]wide&deep”), but with much easier training. The sub-networks of CAT5 (and CAT2) in SWAV hold the
 same architecture
@@ -186,7 +186,41 @@ same architecture
 
 ## Meta-learning & few-shots learning and Out-of-distribution generalization
 
-If you are further interested in the rest few-shots learning and out-of-distribution generalization code, please let me know by leaving a comment. 
+<p align="center">
+  <image src='figures/meta_learning_full_v4.png'/>
+</p>
+
+<p align="center">
+<em>
+  Fig3: Few-shot learning performance on MINIIMAGENET and
+CUB. Four common few-shot learning algorithms are shown in
+red (results from [Chen et al. (2019)](https://arxiv.org/abs/1904.04232)). Two supervised transfer
+methods, with either a linear classifier (BASELINE) or cosine-
+based classifier (BASELINE++) are shown in blue. The DISTILL
+and CAT results, with a cosine-base classifier, are respectively
+shown in orange and gray. The CAT5-S and DISTILL5-S results
+were obtained using five snapshots taken during a single training
+episode with a relatively high step size. The dark blue line shows
+the best individual snapshot. Standard deviations over five repeats
+are reported.
+</em>
+</p>
+<p align="center">
+
+  <image src='figures/ood_general.png'/>
+</p>
+
+<p align="center">
+<em>
+  Fig4: Test accuracy on the CAMELYON17 dataset with
+DENSENET121. We compare various initialization (ERM, CATn,
+DISTILLn, and [Bonsai](https://arxiv.org/pdf/2203.15516.pdf)) for two algorithms VREX and ERM
+using either the IID or OOD hyperparameter tuning method. The
+standard deviations over 5 runs are reported.
+</em>
+</p>
+
+If you are interested in the rest few-shots learning and out-of-distribution generalization code, please let me know by leaving a comment. 
 
 
 ## Citation
