@@ -1,5 +1,5 @@
 ## learning useful representations for shifting tasks and distributions
------------------------
+
 Official Pytorch implementation of [paper](https://arxiv.org/abs/2212.07346)
 
 [Jianyu Zhang](https://www.jianyuzhang.com/),  [Léon Bottou](https://leon.bottou.org/)
@@ -126,7 +126,7 @@ The resulting folder structure looks like:
 With the same experiment protocol as Tab1, we can have the following transfer learning curves with Vision Transformer: 
 
 <p align="center">
-  <image src='figures/vit_tf_v3.png'/>
+  <image src='figures/vit_tf_v3.png' width="500"/>
 </p>
 
 <p align="center">
@@ -219,8 +219,6 @@ using either the IID or OOD hyperparameter tuning method. The
 standard deviations over 5 runs are reported.
 </em>
 </p>
-
-If you are interested in the rest few-shots learning and out-of-distribution generalization code, please let me know by leaving a comment. 
 
 
 ## Citation
