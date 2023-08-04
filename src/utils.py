@@ -46,7 +46,7 @@ def init_distributed_mode(args):
         - world_size
         - rank
     """
-    if args.debug or:
+    if args.debug:
         dist.init_process_group(backend="nccl",
         init_method='tcp://127.0.0.1:%d' % (2000 + np.random.randint(20000)),
         world_size=1,

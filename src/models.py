@@ -6,17 +6,13 @@ import logging
 from typing import List, Tuple
 from collections import OrderedDict
 
-#import clip
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-#from torch.nn.utils.weight_norm import WeightNorm
 import torchvision.models as models
-from .resnet_cifar import ResNet18 #,ResNet18linear, ResNet18fix1st, ResNet18fix1stbn, ResNet18fix1stbneval,IIResNet18fix1stbneval
+from .resnet_cifar import ResNet18 
 from .visiontransformer.modeling import VisionTransformer, CONFIGS, np2th
-#from .utils import count_update_params
-#from .vgg import vgg16_bn
 import math
 
 # copied from https://github.com/facebookresearch/vissl/blob/9551cfb490704ac151b2067b43ea595cda1adf4b/vissl/models/model_helpers.py#L38
@@ -773,75 +769,7 @@ def load_classifier(name,classifier, args):
 
 		
 		return classifier
-	# elif name == 'avg_weights':
-	# 	weight, bias = 0 , 0 	
 
-	# 	pretrained = args.pretrained if args.headpretrained is None  else args.headpretrained
-	# 	for path in pretrained:
-	# 		if path[-3:] == 'npz': # numpy npz checkpoint 
-	# 			checkpoint = np.load(path)
-	# 			weight += np2th(checkpoint["head/kernel"]).t()
-	# 			bias += np2th(checkpoint["head/bias"]).t()
-	# 			#print('only the last weight and bias is used!!!')
-	# 			print(f'(cat) classifier weights loaded, {weight.shape}')
-	# 		else:
-	# 			state_dict = torch.load(path, map_location='cpu')
-	# 			if 'classy_state_dict' in state_dict:
-	# 				head = state_dict['classy_state_dict']['base_model']['model']['heads']
-	# 				weight += head['0.clf.0.weight']
-	# 				bias += head['0.clf.0.bias']
-				
-	# 			elif 'state_dict' in state_dict:
-
-	# 				head = state_dict['state_dict']
-	# 				keyworks = ['module.fc', 'fc', 'module.classifier', 'module.classifier.linear']
-
-	# 				find = False 
-	# 				for key in keyworks:
-	# 					if key+'.weight' in head:
-	# 						weight += head[key+'.weight']
-	# 						bias += head[key+'.bias']
-	# 						find = True 
-	# 						break 
-
-	# 				if not find:
-	# 					for key in head:
-	# 						print(key)
-	# 					raise NotImplementedError 
-
-	# 			else:
-	# 				raise NotImplementedError
-
-	# 	#print('weights', weight)
-		
-	# 	weight /= len(args.pretrained)
-	# 	bias /= len(args.pretrained)
-	# 	classifier.linear.weight.data = weight 
-	# 	classifier.linear.bias.data = bias 
-
-		
-	# 	return classifier
-
-	# elif name.startswith('weights_'):
-	# 	weight, bias = 0 , 0
-	# 	idx = int(name.split('_')[1])
-	# 	path = args.pretrained[idx]
-	# 	if path[-3:] == 'npz': # numpy npz checkpoint 
-			
-	# 		checkpoint = np.load(path)
-	# 		weight = np2th(checkpoint["head/kernel"]).t()
-	# 		bias = np2th(checkpoint["head/bias"]).t()
-	# 		#print('only the last weight and bias is used!!!')
-	# 		print(f'(cat) classifier weights loaded, {weight.shape}')
-	# 	else:
-	# 		raise NotImplementedError
-
-
-	# 	classifier.linear.weight.data = weight 
-	# 	classifier.linear.bias.data = bias 
-
-		
-	# 	return classifier
 
 	elif name == 'dumped_weights':
 		if type(args.headpretrained) ==  str:

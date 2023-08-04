@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --job-name=cat_cifar_supervised_rn50_lineareval_bn
 #SBATCH --time=5:00:00
-#SBATCH --array=0-11
+#SBATCH --array=0-47
 #SBATCH --mem=64G
 
 i=0;

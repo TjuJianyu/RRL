@@ -84,7 +84,7 @@ def main(args):
 
 	
 	#build classifier
-	classifier = get_classifier('linear' datamsg['nclass'], feat_dims, logger, args)
+	classifier = get_classifier(args.classifier, datamsg['nclass'], feat_dims, logger, args)
 
 	#print(classifier.linear.weight.data)
 	logger.info('classifier {}'.format(classifier))
@@ -93,7 +93,7 @@ def main(args):
 	device = torch.device("cuda:" + str(args.gpu_to_work_on))
 
 	# model is either Identity or backbone. only classifier is trainable
-	model, classifier = modelfusion('cat', models, classifier, args)
+	model, classifier = modelfusion(args.richway, models, classifier, args)
 	model, classifier = model.to(device), classifier.to(device)
 
 	classifier = nn.parallel.DistributedDataParallel(
@@ -548,7 +548,9 @@ def custom_params():
 	
 
 	parser.add_argument("--use_bn", default=False, type=bool_flag, help="optionally add a batchnorm layer before the linear classifier")
-	#parser.add_argument('--classifier', default='linear', type=str, help='classifier  [linear, convpoollinear_k]')
+	parser.add_argument('--classifier', default='linear', type=str, help='classifier  [linear, convpoollinear_k]')
+	parser.add_argument('--richway', default='cat', type=str, help='[cat]')
+	
 	parser.add_argument('--headinit', default='none', type=str, help='init head: none, dumped_weights, cat_weights, normal')
 	parser.add_argument('--headpretrained', default=None,  nargs='*',type=str, help='path to dumped head weights. It is activate when --headcatinit is dumped_weight')
 	
@@ -624,42 +626,4 @@ if __name__ == "__main__":
 	args = custom_params()
 	main(args)
 
-	# # if args.debug:
-	# # 	main(args)
-	# # else:
-	# class Experiments(object):
-	# 	"""docstring for Experiments"""
-	# 	def __init__(self, experiment_func):
-	# 		super(Experiments, self).__init__()
-	# 		self.experiment_func = experiment_func
-	# 	def __call__(self, args):
-	# 		#main(args)
-			
-	# 		self.experiment_func(args)
-
-	# 	def checkpoint(self, args):
-	# 		import submitit
-	# 		training_callable = Experiments()
-	# 		submitit.helpers.DelayedSubmission(training_callable, args)	
-
-	# executor = submitit.AutoExecutor(folder=args.dump_path)
-	# # executor.update_parameters(timeout_min = int(args.hours * 60), cluster='debug' if args.debug else None,
-	# # 							nodes = args.nodes,
-	# # 							tasks_per_node=args.tasks_per_node,
-	# # 							gpus_per_node =args.gpus_per_node,
-	# # 							slurm_mem=args.mem,
-	# # 							slurm_job_name=args.job_name,
-	# # 							constraint=args.constraint
-	# # 							)
-	# executor.update_parameters(timeout_min = int(0.5 * 60), 
-	# 							nodes = 1,
-	# 							tasks_per_node=1,
-	# 							gpus_per_node =1,
-	# 							slurm_mem=64000,
-	# 							cpus_per_task=8,
-	# 							slurm_job_name='hahahaha',
-	# 							#constraint=args.constraint
-	# 							)
-	# experiment = Experiments(main)
-	# job = executor.submit(experiment, args)
-	# print(job.job_id)  # ID of your job
+	

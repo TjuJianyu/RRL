@@ -88,7 +88,7 @@ Tab1: transfer learning experiments scripts.
 The following figure shows (focus on solid curves) the transfer learning performance of different representations (ERM / CAT / Distill) and transfer methods (pinear probing / fine-tuning / two-stage fine-tuning). 
 
 <p align="center">
-  <image src='figures/imagenet_sl_tf_v4.png'/>
+  <image src='figures/imagenet_sl_tf_v3.png'/>
 </p>
 
 <p align="center">
@@ -187,14 +187,14 @@ same architecture
 ## Meta-learning & few-shots learning and Out-of-distribution generalization
 
 <p align="center">
-  <image src='figures/meta_learning_full_v4.png'/>
+  <image src='figures/meta_learning_full_v4.png'  width="500"/>
 </p>
 
 <p align="center">
 <em>
   Fig3: Few-shot learning performance on MINIIMAGENET and
 CUB. Four common few-shot learning algorithms are shown in
-red (results from [Chen et al. (2019)](https://arxiv.org/abs/1904.04232)). Two supervised transfer
+red (results from Chen et al. (2019)(https://arxiv.org/abs/1904.04232)). Two supervised transfer
 methods, with either a linear classifier (BASELINE) or cosine-
 based classifier (BASELINE++) are shown in blue. The DISTILL
 and CAT results, with a cosine-base classifier, are respectively
@@ -207,14 +207,14 @@ are reported.
 </p>
 <p align="center">
 
-  <image src='figures/ood_general.png'/>
+  <image src='figures/ood_general.png'  width="500"/>
 </p>
 
 <p align="center">
 <em>
   Fig4: Test accuracy on the CAMELYON17 dataset with
 DENSENET121. We compare various initialization (ERM, CATn,
-DISTILLn, and [Bonsai](https://arxiv.org/pdf/2203.15516.pdf)) for two algorithms VREX and ERM
+DISTILLn, and Bonsai(https://arxiv.org/pdf/2203.15516.pdf)) for two algorithms VREX and ERM
 using either the IID or OOD hyperparameter tuning method. The
 standard deviations over 5 runs are reported.
 </em>
