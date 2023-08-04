@@ -5,6 +5,11 @@ Official Pytorch implementation of [paper](https://arxiv.org/abs/2212.07346)
 [Jianyu Zhang](https://www.jianyuzhang.com/),  [Léon Bottou](https://leon.bottou.org/)
 
 
+<p align="center" width="500">
+  <image src='figures/story.png'/>
+</p>
+
+
 ## Requirements
 
 - python==3.7
