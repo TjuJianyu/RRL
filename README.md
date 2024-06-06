@@ -41,7 +41,7 @@ Download and extract `ImageNet` and `Inaturalist18` datasets to `data/imagenet` 
 ### Download (ImageNet1k) pretrained checkpoints:
 
 You can get pretrained checkpoints either:
-- by automatically download according to ```python tools download.py``` or
+- by automatically download according to ```python tools/download.py``` or
 - by manually download according to [download_checkpoint.md](download_checkpoint.md) or 
 - by training from scratch according to [download_checkpoint.md](download_checkpoint.md)
 
