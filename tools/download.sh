@@ -1,0 +1,13 @@
+pip install gdown
+
+mkdir 'checkpoints/supervised_pretrain'
+
+gdown 1puDJCfUdexV7jc2QDtzT3GIV6bK_a5DS -O checkpoints/supervised_pretrain/resnet50.tar.gz
+tar -xzvf checkpoints/supervised_pretrain/resnet50.tar.gz -C checkpoints/supervised_pretrain/
+rm checkpoints/supervised_pretrain/resnet50.tar.gz
+
+gdown 1yxpGox1on8EG-bgh5m96P-HmFdF1FqKV -O checkpoints/supervised_pretrain/resnet50w2_imagenet1k_supervised.pth.tar
+gdown 1BMCdWbRp4nUxRQwKux-_BEQS_5TKC2h6 -O checkpoints/supervised_pretrain/resnet50w4_imagenet1k_supervised.pth.tar
+gdown 1vC5es1ysSSZOEhkKQWBafjRyLR_oFPgl -O checkpoints/supervised_pretrain/2resnet50_imagenet1k_supervised.pth.tar
+gdown 1J3adr3hepZZXyLcncduBi3v6PZLPAEW5 -O checkpoints/supervised_pretrain/4resnet50_imagenet1k_supervised.pth.tar
+gdown 1iS82WpEWaTqU6I1qbzEB64mttIp1dYDz -O checkpoints/supervised_pretrain/resnet50_imagenet1k_supervised_distill5.pth.tar

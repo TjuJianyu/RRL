@@ -17,6 +17,7 @@ Official Pytorch implementation of [paper](https://arxiv.org/abs/2212.07346)
 - torchvision>=0.14.1
 - pyyaml==6.0
 - classy-vision==0.6.0
+- gdown>=5.2.0
 
 ## Datasets
 
