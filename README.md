@@ -18,6 +18,10 @@ Official Pytorch implementation of [paper](https://arxiv.org/abs/2212.07346)
 - pyyaml==6.0
 - classy-vision==0.6.0
 - gdown>=5.2.0
+- pandas
+- scipy
+- ml_collections
+- wilds
 
 ## Datasets
 
